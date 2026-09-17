@@ -1,35 +1,117 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Trash2, Download, FileSpreadsheet, Calendar } from 'lucide-react';
+import { Pencil, Trash2, Download, FileSpreadsheet, Calendar, Sun, Sunset } from 'lucide-react';
 import { downloadFile } from '@/lib/api-client';
 
+export type ShiftType = 'PAGI' | 'SORE';
+
+export function getDynamicShiftStatus(
+  shiftDate: string,
+  shiftType: ShiftType = 'PAGI',
+  customStatus?: string
+): { status: string; category: 'operating' | 'completed' | 'upcoming' | 'ready' } {
+  if (customStatus === 'Selesai' || customStatus === 'CLOSED') {
+    return { status: 'Selesai (Shift Ditutup)', category: 'completed' };
+  }
+
+  // Ambil waktu WIB (UTC+7)
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const wibDate = new Date(utc + 3600000 * 7);
+
+  const todayStr = wibDate.toISOString().split('T')[0]!;
+  const currentHour = wibDate.getHours();
+  const currentMinute = wibDate.getMinutes();
+  const currentTimeDec = currentHour + currentMinute / 60;
+
+  // 1. Tanggal sebelum hari ini -> Selesai / Terlewat
+  if (shiftDate < todayStr) {
+    return { status: 'Selesai (Waktu Terlewat)', category: 'completed' };
+  }
+
+  // 2. Tanggal setelah hari ini -> Mendatang
+  if (shiftDate > todayStr) {
+    return { status: 'Mendatang (Terjadwal)', category: 'upcoming' };
+  }
+
+  // 3. Tanggal hari ini -> Evaluasi berdasarkan jam shift
+  if (shiftType === 'PAGI') {
+    // Shift Pagi: 09:00 s/d 16:00 WIB
+    if (currentTimeDec < 9.0) {
+      return { status: 'Belum Mulai (Pagi 09:00 - 16:00)', category: 'ready' };
+    }
+    if (currentTimeDec >= 9.0 && currentTimeDec < 16.0) {
+      return { status: 'Sedang Beroperasi (Shift Pagi)', category: 'operating' };
+    }
+    return { status: 'Selesai (Shift Pagi Berakhir)', category: 'completed' };
+  } else {
+    // Shift Sore: 16:00 s/d 21:00 WIB
+    if (currentTimeDec < 16.0) {
+      return { status: 'Belum Mulai (Sore 16:00 - 21:00)', category: 'ready' };
+    }
+    if (currentTimeDec >= 16.0 && currentTimeDec < 21.0) {
+      return { status: 'Sedang Beroperasi (Shift Sore)', category: 'operating' };
+    }
+    return { status: 'Selesai (Shift Sore Berakhir)', category: 'completed' };
+  }
+}
+
 export default function AssignmentsPage() {
-  const [assignments, setAssignments] = useState([
+  const todayStr = new Date().toISOString().split('T')[0]!;
+
+  const [assignments, setAssignments] = useState<
+    Array<{
+      id: string;
+      date: string;
+      shiftType: ShiftType;
+      boothId: string;
+      boothName: string;
+      userId: string;
+      userName: string;
+      assignedBy: string;
+      status?: string;
+    }>
+  >([
     {
       id: 'a1',
-      date: '2026-09-16',
+      date: todayStr,
+      shiftType: 'PAGI',
       boothId: 'b1111111-1111-1111-1111-111111111111',
       boothName: 'Booth Alun-Alun Kota',
       userId: 'u2',
       userName: 'Rina Attendant (rina@tehbaling.com)',
       assignedBy: 'Pak Budi (Owner)',
-      status: 'Sedang Beroperasi',
+      status: 'OPEN',
     },
     {
       id: 'a2',
-      date: '2026-09-16',
+      date: todayStr,
+      shiftType: 'SORE',
+      boothId: 'b1111111-1111-1111-1111-111111111111',
+      boothName: 'Booth Alun-Alun Kota',
+      userId: 'u3',
+      userName: 'Siti Attendant (siti@tehbaling.com)',
+      assignedBy: 'Pak Budi (Owner)',
+      status: 'OPEN',
+    },
+    {
+      id: 'a3',
+      date: todayStr,
+      shiftType: 'PAGI',
       boothId: 'b2222222-2222-2222-2222-222222222222',
       boothName: 'Booth Kampus UNESA',
       userId: 'u3',
       userName: 'Siti Attendant (siti@tehbaling.com)',
       assignedBy: 'Pak Budi (Owner)',
-      status: 'Sedang Beroperasi',
+      status: 'OPEN',
     },
   ]);
 
-  const [date, setDate] = useState('2026-09-16');
+  const [date, setDate] = useState(todayStr);
+  const [shiftType, setShiftType] = useState<ShiftType>('PAGI');
   const [filterDate, setFilterDate] = useState<string>('ALL');
+  const [filterShift, setFilterShift] = useState<string>('ALL');
   const [boothId, setBoothId] = useState('b1111111-1111-1111-1111-111111111111');
   const [userId, setUserId] = useState('u2');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -51,7 +133,7 @@ export default function AssignmentsPage() {
     setExportLoading(true);
     try {
       const query = filterDate !== 'ALL' ? `?date=${filterDate}` : '';
-      const fallbackName = `Jadwal_Shift_Staf_${filterDate === 'ALL' ? new Date().toISOString().split('T')[0] : filterDate}.xlsx`;
+      const fallbackName = `Jadwal_Shift_Staf_${filterDate === 'ALL' ? todayStr : filterDate}.xlsx`;
       const ok = await downloadFile(`/export/shift-assignments${query}`, fallbackName);
       if (!ok) {
         handleExportCSV();
@@ -64,21 +146,35 @@ export default function AssignmentsPage() {
   };
 
   const handleExportCSV = () => {
-    const dataToExport = filterDate === 'ALL' ? assignments : assignments.filter((a) => a.date === filterDate);
-    const headers = ['No', 'Tanggal Shift', 'Nama Booth', 'Staf Bertugas', 'Ditugaskan Oleh', 'Status Shift'];
-    const rows = dataToExport.map((item, idx) => [
-      idx + 1,
-      `"${item.date}"`,
-      `"${item.boothName}"`,
-      `"${item.userName}"`,
-      `"${item.assignedBy}"`,
-      `"${item.status}"`,
-    ]);
+    let dataToExport = assignments;
+    if (filterDate !== 'ALL') {
+      dataToExport = dataToExport.filter((a) => a.date === filterDate);
+    }
+    if (filterShift !== 'ALL') {
+      dataToExport = dataToExport.filter((a) => a.shiftType === filterShift);
+    }
+
+    const headers = ['No', 'Tanggal Shift', 'Sesi Shift', 'Jam Operasional', 'Nama Booth', 'Staf Bertugas', 'Ditugaskan Oleh', 'Status Shift'];
+    const rows = dataToExport.map((item, idx) => {
+      const evalStatus = getDynamicShiftStatus(item.date, item.shiftType, item.status);
+      const shiftHours = item.shiftType === 'PAGI' ? '09:00 - 16:00 WIB' : '16:00 - 21:00 WIB';
+      return [
+        idx + 1,
+        `"${item.date}"`,
+        `"${item.shiftType === 'PAGI' ? 'Shift Pagi' : 'Shift Sore'}"`,
+        `"${shiftHours}"`,
+        `"${item.boothName}"`,
+        `"${item.userName}"`,
+        `"${item.assignedBy}"`,
+        `"${evalStatus.status}"`,
+      ];
+    });
+
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Jadwal_Shift_Staf_${filterDate === 'ALL' ? new Date().toISOString().split('T')[0] : filterDate}.csv`);
+    link.setAttribute('download', `Jadwal_Shift_Staf_${filterDate === 'ALL' ? todayStr : filterDate}.csv`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -87,6 +183,7 @@ export default function AssignmentsPage() {
   const handleEdit = (item: (typeof assignments)[0]) => {
     setEditingId(item.id);
     setDate(item.date);
+    setShiftType(item.shiftType || 'PAGI');
     setBoothId(item.boothId);
     setUserId(item.userId);
     setError(null);
@@ -94,7 +191,8 @@ export default function AssignmentsPage() {
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setDate('2026-09-16');
+    setDate(todayStr);
+    setShiftType('PAGI');
     setError(null);
   };
 
@@ -120,6 +218,7 @@ export default function AssignmentsPage() {
             ? {
                 ...a,
                 date,
+                shiftType,
                 boothId,
                 boothName: boothObj ? boothObj.name : a.boothName,
                 userId,
@@ -135,26 +234,33 @@ export default function AssignmentsPage() {
         {
           id: `a_${Date.now()}`,
           date,
+          shiftType,
           boothId,
           boothName: boothObj ? boothObj.name : 'Booth',
           userId,
           userName: userObj ? userObj.name : 'Staf',
           assignedBy: 'Pak Budi (Owner)',
-          status: 'Belum Mulai',
+          status: 'OPEN',
         },
       ]);
     }
     setError(null);
   };
 
-  const displayedAssignments = filterDate === 'ALL' ? assignments : assignments.filter((a) => a.date === filterDate);
+  const displayedAssignments = assignments.filter((a) => {
+    if (filterDate !== 'ALL' && a.date !== filterDate) return false;
+    if (filterShift !== 'ALL' && a.shiftType !== filterShift) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Jadwal Penugasan Staf Booth</h1>
-          <p className="text-sm text-slate-500">Tugaskan dan export rekap penjaga booth (attendant) harian</p>
+          <h1 className="text-2xl font-bold text-slate-900">Jadwal Penugasan Shift Staf Booth</h1>
+          <p className="text-sm text-slate-500">
+            Kelola penugasan staf per sesi: <span className="font-semibold text-amber-700">Shift Pagi (09:00 - 16:00)</span> & <span className="font-semibold text-indigo-700">Shift Sore (16:00 - 21:00)</span>
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -177,13 +283,14 @@ export default function AssignmentsPage() {
         </div>
       </div>
 
-      {/* Filter Tanggal Penugasan */}
+      {/* Filter Tanggal & Sesi Shift */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
           <Calendar className="w-4 h-4 text-emerald-600" />
-          Filter Jadwal Berdasarkan Hari:
+          Filter Jadwal:
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Filter Tanggal */}
           <button
             onClick={() => setFilterDate('ALL')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
@@ -199,6 +306,17 @@ export default function AssignmentsPage() {
             className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 font-semibold focus:border-emerald-600 focus:outline-none"
             placeholder="Pilih Tanggal"
           />
+
+          {/* Filter Shift */}
+          <select
+            value={filterShift}
+            onChange={(e) => setFilterShift(e.target.value)}
+            className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 font-semibold focus:border-emerald-600 focus:outline-none bg-white"
+          >
+            <option value="ALL">Semua Sesi Shift</option>
+            <option value="PAGI">🌅 Shift Pagi (09:00 - 16:00)</option>
+            <option value="SORE">🌇 Shift Sore (16:00 - 21:00)</option>
+          </select>
         </div>
       </div>
 
@@ -206,7 +324,7 @@ export default function AssignmentsPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-slate-900">
-            {editingId ? 'Edit Penugasan Staf' : 'Form Penugasan Harian'}
+            {editingId ? 'Edit Penugasan Shift' : 'Form Penugasan Shift Staf'}
           </h2>
           {editingId && (
             <button
@@ -220,16 +338,28 @@ export default function AssignmentsPage() {
         
         {error && <p data-testid="assignment-error" className="text-sm text-red-600">{error}</p>}
 
-        <form onSubmit={handleAssign} data-testid="assignment-form" className="grid grid-cols-1 gap-4 sm:grid-cols-4 sm:items-end">
+        <form onSubmit={handleAssign} data-testid="assignment-form" className="grid grid-cols-1 gap-4 sm:grid-cols-5 sm:items-end">
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500">Tanggal Penugasan</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Tanggal Shift</label>
             <input
               type="date"
               data-testid="assignment-date-input"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Sesi Jam Shift</label>
+            <select
+              value={shiftType}
+              onChange={(e) => setShiftType(e.target.value as ShiftType)}
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium bg-white"
+            >
+              <option value="PAGI">🌅 Pagi (09:00 - 16:00 WIB)</option>
+              <option value="SORE">🌇 Sore (16:00 - 21:00 WIB)</option>
+            </select>
           </div>
 
           <div>
@@ -238,7 +368,7 @@ export default function AssignmentsPage() {
               data-testid="assignment-booth-select"
               value={boothId}
               onChange={(e) => setBoothId(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium bg-white"
             >
               {boothOptions.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -249,12 +379,12 @@ export default function AssignmentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Staf Stand</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Staf Bertugas</label>
             <select
               data-testid="assignment-user-select"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium bg-white"
             >
               {userOptions.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -268,9 +398,9 @@ export default function AssignmentsPage() {
             <button
               type="submit"
               data-testid="assign-user-btn"
-              className="w-full rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition"
+              className="w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 transition flex items-center justify-center gap-1.5"
             >
-              {editingId ? 'Update Tugas' : '+ Tugaskan Staf'}
+              {editingId ? 'Update Tugas' : '+ Jadwalkan Shift'}
             </button>
           </div>
         </form>
@@ -283,59 +413,79 @@ export default function AssignmentsPage() {
         </p>
         <div className="w-full max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="w-full max-w-full overflow-x-auto block">
-            <table data-testid="assignments-table" className="w-full min-w-[700px] text-left text-sm text-slate-600">
+            <table data-testid="assignments-table" className="w-full min-w-[760px] text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-6 py-3 whitespace-nowrap">Tanggal</th>
-                  <th className="px-6 py-3 whitespace-nowrap">Nama Booth</th>
-                  <th className="px-6 py-3 whitespace-nowrap">Staf Bertugas</th>
-                  <th className="px-6 py-3 whitespace-nowrap">Ditugaskan Oleh</th>
-                  <th className="px-6 py-3 whitespace-nowrap">Status Shift</th>
-                  <th className="px-6 py-3 text-right whitespace-nowrap">Aksi</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Tanggal</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Sesi Shift</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Nama Booth</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Staf Bertugas</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Ditugaskan Oleh</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Status Shift</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {displayedAssignments.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-mono font-medium text-slate-900 whitespace-nowrap">{item.date}</td>
-                    <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">{item.boothName}</td>
-                    <td className="px-6 py-4 text-emerald-700 font-medium whitespace-nowrap">{item.userName}</td>
-                    <td className="px-6 py-4 text-slate-500 text-xs whitespace-nowrap">{item.assignedBy}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          item.status === 'Sedang Beroperasi'
-                            ? 'bg-blue-100 text-blue-800'
-                            : item.status === 'Selesai'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          data-testid={`edit-assignment-btn-${item.id}`}
-                          onClick={() => handleEdit(item)}
-                          className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                {displayedAssignments.map((item) => {
+                  const evalStatus = getDynamicShiftStatus(item.date, item.shiftType, item.status);
+                  const isPagi = item.shiftType === 'PAGI';
+
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-4 font-mono font-medium text-slate-900 whitespace-nowrap">{item.date}</td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${
+                            isPagi
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                          }`}
                         >
-                          <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                          Edit
-                        </button>
-                        <button
-                          data-testid={`delete-assignment-btn-${item.id}`}
-                          onClick={() => handleDelete(item.id)}
-                          className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                          {isPagi ? <Sun className="w-3.5 h-3.5 text-amber-600" /> : <Sunset className="w-3.5 h-3.5 text-indigo-600" />}
+                          {isPagi ? 'Shift Pagi (09:00 - 16:00)' : 'Shift Sore (16:00 - 21:00)'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-slate-900 whitespace-nowrap">{item.boothName}</td>
+                      <td className="px-5 py-4 text-emerald-700 font-medium whitespace-nowrap">{item.userName}</td>
+                      <td className="px-5 py-4 text-slate-500 text-xs whitespace-nowrap">{item.assignedBy}</td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            evalStatus.category === 'operating'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : evalStatus.category === 'completed'
+                              ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                              : evalStatus.category === 'ready'
+                              ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                          }`}
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                          Batal
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {evalStatus.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            data-testid={`edit-assignment-btn-${item.id}`}
+                            onClick={() => handleEdit(item)}
+                            className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                            Edit
+                          </button>
+                          <button
+                            data-testid={`delete-assignment-btn-${item.id}`}
+                            onClick={() => handleDelete(item.id)}
+                            className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            Batal
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
