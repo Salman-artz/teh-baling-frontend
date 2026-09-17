@@ -292,6 +292,7 @@ export default function AssignmentsPage() {
         boothId,
         userId,
         date,
+        shiftType: shiftType || 'PAGI',
       });
 
       if (res.success) {

@@ -43,9 +43,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex text-slate-900 max-w-full overflow-x-hidden">
-      {/* Sidebar for Desktop */}
-      <aside className="hidden lg:flex w-64 flex-col bg-slate-900 text-white border-r border-slate-800 shadow-xl">
+    <div className="min-h-screen bg-slate-100 flex flex-col lg:pl-64 text-slate-900 max-w-full overflow-x-hidden">
+      {/* Sidebar for Desktop (Fixed) */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col bg-slate-900 text-white border-r border-slate-800 shadow-xl z-30">
         {/* Brand Logo */}
         <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-emerald-950">
           <div className="flex items-center gap-3">
