@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   MapPin,
   Navigation,
-  Compass,
   Layers,
   Check,
   Crosshair,
@@ -24,17 +23,6 @@ interface MapPickerProps {
   onChange: (lat: string, lng: string) => void;
   boothName?: string;
 }
-
-const PRESETS = [
-  { name: 'Alun-Alun SBY', lat: -7.2575, lng: 112.7521 },
-  { name: 'Kampus UNESA', lat: -7.3082, lng: 112.6738 },
-  { name: 'Stasiun Gubeng', lat: -7.2654, lng: 112.7519 },
-  { name: 'Taman Bungkul', lat: -7.2912, lng: 112.7398 },
-  { name: 'Tunjungan Plaza', lat: -7.2625, lng: 112.7392 },
-  { name: 'Kediri Kota', lat: -7.8166, lng: 112.0119 },
-  { name: 'Sidoarjo Kota', lat: -7.4478, lng: 112.7183 },
-  { name: 'Malang Kota', lat: -7.9826, lng: 112.6308 },
-];
 
 type TileProvider = 'google-street' | 'google-hybrid' | 'osm' | 'esri';
 
@@ -524,29 +512,12 @@ export default function MapPicker({ latitude, longitude, onChange, boothName }: 
         </p>
       </div>
 
-      {/* Layer Switcher & Preset Quick Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-        {/* Presets */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-slate-500 font-bold py-0.5 flex items-center gap-1">
-            <Compass className="w-3.5 h-3.5 text-emerald-700" /> Preset:
-          </span>
-          {PRESETS.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => applyCoordinates(p.lat, p.lng)}
-              className="rounded-md bg-slate-100 hover:bg-emerald-100 hover:text-emerald-900 border border-slate-200 px-2 py-0.5 text-slate-700 font-semibold transition shadow-2xs"
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-
+      {/* Layer Switcher */}
+      <div className="flex items-center justify-end text-[11px]">
         {/* Tile Provider Switcher */}
         <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
           <span className="text-[10px] font-bold text-slate-500 px-1 flex items-center gap-0.5">
-            <Globe className="w-3 h-3 text-emerald-700" /> Tampilan:
+            <Globe className="w-3 h-3 text-emerald-700" /> Tampilan Peta:
           </span>
           <button
             type="button"
