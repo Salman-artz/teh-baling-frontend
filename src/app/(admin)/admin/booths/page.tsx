@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { Pencil, Trash2, MapPin, Store, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Store, RefreshCw, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
 // Dynamic import for Leaflet map component (SSR false)
@@ -61,8 +61,11 @@ export default function BoothsPage() {
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState('-7.2575000');
   const [lng, setLng] = useState('112.7521000');
+  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchBooths = async () => {
     setLoading(true);
@@ -88,6 +91,7 @@ export default function BoothsPage() {
     setAddress('');
     setLat('-7.2575000');
     setLng('112.7521000');
+    setIsActive(true);
     setError(null);
     setShowModal(true);
   };
@@ -98,8 +102,37 @@ export default function BoothsPage() {
     setAddress(booth.address);
     setLat(booth.latitude || '-7.2575000');
     setLng(booth.longitude || '112.7521000');
+    setIsActive(booth.isActive);
     setError(null);
     setShowModal(true);
+  };
+
+  const handleToggleStatus = async (booth: BoothItem) => {
+    const nextStatus = !booth.isActive;
+    try {
+      setBoothList((prev) =>
+        prev.map((b) => (b.id === booth.id ? { ...b, isActive: nextStatus } : b))
+      );
+      const res = await api.patch<BoothItem>(`/booths/${booth.id}`, {
+        isActive: nextStatus,
+      });
+      if (res.success && res.data) {
+        setBoothList((prev) =>
+          prev.map((b) => (b.id === booth.id ? res.data! : b))
+        );
+      }
+      setFeedback({
+        type: 'success',
+        message: `Status booth "${booth.name}" berhasil diubah menjadi ${nextStatus ? 'Aktif' : 'Non-Aktif'}.`,
+      });
+    } catch {
+      setBoothList((prev) =>
+        prev.map((b) => (b.id === booth.id ? { ...b, isActive: booth.isActive } : b))
+      );
+      setFeedback({ type: 'error', message: 'Gagal mengubah status booth.' });
+    } finally {
+      setTimeout(() => setFeedback(null), 4000);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -141,13 +174,15 @@ export default function BoothsPage() {
 
     setLoading(true);
     try {
+      const payload = {
+        name: name.trim(),
+        address: address.trim(),
+        latitude: lat || '-7.2575000',
+        longitude: lng || '112.7521000',
+        isActive,
+      };
+
       if (editingId) {
-        const payload = {
-          name: name.trim(),
-          address: address.trim(),
-          latitude: lat || '-7.2575000',
-          longitude: lng || '112.7521000',
-        };
         const res = await api.patch<BoothItem>(`/booths/${editingId}`, payload);
         if (res.success && res.data) {
           setBoothList((prev) => prev.map((b) => (b.id === editingId ? res.data! : b)));
@@ -158,12 +193,6 @@ export default function BoothsPage() {
         }
         setFeedback({ type: 'success', message: `Booth "${name}" berhasil diperbarui.` });
       } else {
-        const payload = {
-          name: name.trim(),
-          address: address.trim(),
-          latitude: lat || '-7.2575000',
-          longitude: lng || '112.7521000',
-        };
         const res = await api.post<BoothItem>('/booths', payload);
         if (res.success && res.data) {
           setBoothList((prev) => [res.data!, ...prev]);
@@ -176,7 +205,7 @@ export default function BoothsPage() {
               address,
               latitude: lat || '-7.2575000',
               longitude: lng || '112.7521000',
-              isActive: true,
+              isActive,
             },
           ]);
         }
@@ -187,6 +216,7 @@ export default function BoothsPage() {
       setAddress('');
       setLat('-7.2575000');
       setLng('112.7521000');
+      setIsActive(true);
       setEditingId(null);
       setShowModal(false);
       setError(null);
@@ -198,13 +228,30 @@ export default function BoothsPage() {
     }
   };
 
+  const filteredBooths = useMemo(() => {
+    return boothList.filter((b) => {
+      if (statusFilter === 'ACTIVE' && !b.isActive) return false;
+      if (statusFilter === 'INACTIVE' && b.isActive) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        return b.name.toLowerCase().includes(q) || b.address.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [boothList, statusFilter, searchQuery]);
+
+  const countAll = boothList.length;
+  const countActive = boothList.filter((b) => b.isActive).length;
+  const countInactive = boothList.filter((b) => !b.isActive).length;
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Manajemen Booth & Outlet</h1>
           <p className="text-sm text-slate-500">
-            Kelola data cabang outlet Teh Baling dan titik koordinat GPS lokasi fisik di peta
+            Kelola data cabang outlet Teh Baling, status operasional aktif/nonaktif, dan titik koordinat GPS lokasi fisik di peta
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -220,7 +267,7 @@ export default function BoothsPage() {
           <button
             data-testid="add-booth-btn"
             onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition"
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition cursor-pointer"
           >
             <Store className="h-4 w-4" />
             + Tambah Booth Baru
@@ -245,6 +292,71 @@ export default function BoothsPage() {
         </div>
       )}
 
+      {/* Search & Status Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'ALL'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <span>Semua Booth</span>
+            <span className="rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] font-mono">
+              {countAll}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('ACTIVE')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'ACTIVE'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-emerald-800 hover:bg-emerald-50'
+            }`}
+          >
+            <span>🟢 Aktif</span>
+            <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+              statusFilter === 'ACTIVE' ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {countActive}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('INACTIVE')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'INACTIVE'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <span>⚪ Non-Aktif</span>
+            <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+              statusFilter === 'INACTIVE' ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {countInactive}
+            </span>
+          </button>
+        </div>
+
+        {/* Search Box */}
+        <div className="relative flex-1 sm:max-w-xs">
+          <input
+            type="text"
+            placeholder="Cari nama booth atau alamat..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 focus:outline-none"
+          />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+        </div>
+      </div>
+
       {/* Modal Tambah / Edit Booth */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
@@ -256,7 +368,7 @@ export default function BoothsPage() {
               <div className="flex items-center gap-2">
                 <Store className="w-5 h-5 text-emerald-700" />
                 <h2 className="text-lg font-bold text-slate-900">
-                  {editingId ? 'Edit Lokasi Booth' : 'Tambah Booth Baru & Titik Peta'}
+                  {editingId ? 'Edit Lokasi & Status Booth' : 'Tambah Booth Baru & Titik Peta'}
                 </h2>
               </div>
               <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
@@ -292,6 +404,31 @@ export default function BoothsPage() {
                 className="mt-1 block w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 focus:outline-none"
                 placeholder="Jl. Darmo No. 45, Surabaya"
               />
+            </div>
+
+            {/* Status Switch Toggle */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 flex items-center justify-between">
+              <div>
+                <label className="text-xs font-bold text-slate-800">Status Operasional Booth</label>
+                <p className="text-[11px] text-slate-500">
+                  {isActive
+                    ? '🟢 Booth Aktif (Dapat dipilih untuk penugasan shift kasir)'
+                    : '⚪ Booth Non-Aktif (Operasional ditutup sementara)'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsActive(!isActive)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  isActive ? 'bg-emerald-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    isActive ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Interactive Leaflet/OpenStreetMap Map Picker */}
@@ -335,7 +472,7 @@ export default function BoothsPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
               >
                 Batal
               </button>
@@ -343,7 +480,7 @@ export default function BoothsPage() {
                 type="submit"
                 data-testid="booth-save-btn"
                 disabled={loading}
-                className="rounded-lg bg-emerald-700 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-50"
+                className="rounded-lg bg-emerald-700 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-50 cursor-pointer"
               >
                 {loading ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambah Booth'}
               </button>
@@ -365,60 +502,78 @@ export default function BoothsPage() {
                   <th className="px-6 py-3 whitespace-nowrap">Nama Booth</th>
                   <th className="px-6 py-3 whitespace-nowrap">Alamat Fisik</th>
                   <th className="px-6 py-3 whitespace-nowrap">Koordinat GPS Peta</th>
-                  <th className="px-6 py-3 whitespace-nowrap">Status</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Status Operasional</th>
                   <th className="px-6 py-3 text-right whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {boothList.map((booth) => (
-                  <tr key={booth.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1.5 rounded-md bg-emerald-100 text-emerald-800">
-                          <Store className="w-4 h-4" />
-                        </span>
-                        {booth.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-700 whitespace-nowrap">{booth.address}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-slate-600 whitespace-nowrap">
-                      <a
-                        href={`https://www.google.com/maps?q=${booth.latitude},${booth.longitude}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 text-emerald-700 hover:underline font-bold bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 w-fit"
-                      >
-                        <MapPin className="h-3.5 w-3.5 text-emerald-600" />
-                        {booth.latitude}, {booth.longitude} ↗
-                      </a>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                        {booth.isActive ? 'Aktif Beroperasi' : 'Non-Aktif'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          data-testid={`edit-booth-btn-${booth.id}`}
-                          onClick={() => handleOpenEdit(booth)}
-                          className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                          Edit Peta
-                        </button>
-                        <button
-                          data-testid={`delete-booth-btn-${booth.id}`}
-                          onClick={() => handleDelete(booth.id)}
-                          className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                          Hapus
-                        </button>
-                      </div>
+                {filteredBooths.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-xs text-slate-400">
+                      Tidak ada booth yang sesuai dengan filter atau pencarian.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredBooths.map((booth) => (
+                    <tr key={booth.id} className={`hover:bg-slate-50 transition ${!booth.isActive ? 'bg-slate-50/40 opacity-75' : ''}`}>
+                      <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className={`p-1.5 rounded-md ${booth.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
+                            <Store className="w-4 h-4" />
+                          </span>
+                          <span>{booth.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-700 whitespace-nowrap">{booth.address}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-600 whitespace-nowrap">
+                        <a
+                          href={`https://www.google.com/maps?q=${booth.latitude},${booth.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 text-emerald-700 hover:underline font-bold bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 w-fit"
+                        >
+                          <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                          {booth.latitude}, {booth.longitude} ↗
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(booth)}
+                          title={booth.isActive ? 'Klik untuk nonaktifkan booth' : 'Klik untuk aktifkan booth'}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition cursor-pointer hover:shadow-xs ${
+                            booth.isActive
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${booth.isActive ? 'bg-emerald-600 animate-pulse' : 'bg-slate-400'}`} />
+                          <span>{booth.isActive ? 'Aktif' : 'Non-Aktif'}</span>
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            data-testid={`edit-booth-btn-${booth.id}`}
+                            onClick={() => handleOpenEdit(booth)}
+                            className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                            Edit
+                          </button>
+                          <button
+                            data-testid={`delete-booth-btn-${booth.id}`}
+                            onClick={() => handleDelete(booth.id)}
+                            className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
