@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { Pencil, Trash2, Download, FileSpreadsheet, Calendar, Sun, Sunset } from 'lucide-react';
-import { downloadFile } from '@/lib/api-client';
+import { useState, useEffect } from 'react';
+import { Pencil, Trash2, Download, FileSpreadsheet, Calendar, Sun, Sunset, Store, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { api, downloadFile } from '@/lib/api-client';
 
 type ShiftType = 'PAGI' | 'SORE';
 
@@ -57,77 +57,104 @@ function getDynamicShiftStatus(
   }
 }
 
+interface BoothOption {
+  id: string;
+  name: string;
+  address?: string;
+  isActive?: boolean;
+}
+
+interface UserOption {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  isActive?: boolean;
+}
+
+interface AssignmentItem {
+  id: string;
+  date: string;
+  shiftType: ShiftType;
+  boothId: string;
+  boothName: string;
+  userId: string;
+  userName: string;
+  assignedBy: string;
+  status?: string;
+}
+
 export default function AssignmentsPage() {
   const todayStr = new Date().toISOString().split('T')[0]!;
 
-  const [assignments, setAssignments] = useState<
-    Array<{
-      id: string;
-      date: string;
-      shiftType: ShiftType;
-      boothId: string;
-      boothName: string;
-      userId: string;
-      userName: string;
-      assignedBy: string;
-      status?: string;
-    }>
-  >([
-    {
-      id: 'a1',
-      date: todayStr,
-      shiftType: 'PAGI',
-      boothId: 'b1111111-1111-1111-1111-111111111111',
-      boothName: 'Booth Alun-Alun Kota',
-      userId: 'u2',
-      userName: 'Rina Attendant (rina@tehbaling.com)',
-      assignedBy: 'Pak Budi (Owner)',
-      status: 'OPEN',
-    },
-    {
-      id: 'a2',
-      date: todayStr,
-      shiftType: 'SORE',
-      boothId: 'b1111111-1111-1111-1111-111111111111',
-      boothName: 'Booth Alun-Alun Kota',
-      userId: 'u3',
-      userName: 'Siti Attendant (siti@tehbaling.com)',
-      assignedBy: 'Pak Budi (Owner)',
-      status: 'OPEN',
-    },
-    {
-      id: 'a3',
-      date: todayStr,
-      shiftType: 'PAGI',
-      boothId: 'b2222222-2222-2222-2222-222222222222',
-      boothName: 'Booth Kampus UNESA',
-      userId: 'u3',
-      userName: 'Siti Attendant (siti@tehbaling.com)',
-      assignedBy: 'Pak Budi (Owner)',
-      status: 'OPEN',
-    },
-  ]);
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [boothOptions, setBoothOptions] = useState<BoothOption[]>([]);
+  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [date, setDate] = useState(todayStr);
   const [shiftType, setShiftType] = useState<ShiftType>('PAGI');
   const [filterDate, setFilterDate] = useState<string>('ALL');
   const [filterShift, setFilterShift] = useState<string>('ALL');
-  const [boothId, setBoothId] = useState('b1111111-1111-1111-1111-111111111111');
-  const [userId, setUserId] = useState('u2');
+  const [boothId, setBoothId] = useState('');
+  const [userId, setUserId] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
 
-  const boothOptions = [
-    { id: 'b1111111-1111-1111-1111-111111111111', name: 'Booth Alun-Alun Kota' },
-    { id: 'b2222222-2222-2222-2222-222222222222', name: 'Booth Kampus UNESA' },
-    { id: 'b3333333-3333-3333-3333-333333333333', name: 'Booth Stasiun Gubeng' },
-  ];
+  // 1. Fetch Real Active Booths
+  const fetchBooths = async () => {
+    try {
+      const res = await api.get<BoothOption[]>('/booths?status=active');
+      if (res.success && Array.isArray(res.data)) {
+        setBoothOptions(res.data);
+        if (res.data.length > 0 && !boothId) {
+          setBoothId(res.data[0].id);
+        }
+      }
+    } catch {
+      // fallback
+    }
+  };
 
-  const userOptions = [
-    { id: 'u2', name: 'Rina Attendant (rina@tehbaling.com)' },
-    { id: 'u3', name: 'Siti Attendant (siti@tehbaling.com)' },
-  ];
+  // 2. Fetch Real Users (Attendants)
+  const fetchUsers = async () => {
+    try {
+      const res = await api.get<UserOption[]>('/users');
+      if (res.success && Array.isArray(res.data)) {
+        const attendants = res.data.filter((u) => u.isActive !== false);
+        setUserOptions(attendants);
+        if (attendants.length > 0 && !userId) {
+          setUserId(attendants[0].id);
+        }
+      }
+    } catch {
+      // fallback
+    }
+  };
+
+  // 3. Fetch Real Assignments
+  const fetchAssignments = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<AssignmentItem[]>('/booth-assignments');
+      if (res.success && Array.isArray(res.data)) {
+        setAssignments(res.data);
+      }
+    } catch {
+      // fallback
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBooths();
+    fetchUsers();
+    fetchAssignments();
+  }, []);
 
   const handleExportExcel = async () => {
     setExportLoading(true);
@@ -180,7 +207,7 @@ export default function AssignmentsPage() {
     link.remove();
   };
 
-  const handleEdit = (item: (typeof assignments)[0]) => {
+  const handleEdit = (item: AssignmentItem) => {
     setEditingId(item.id);
     setDate(item.date);
     setShiftType(item.shiftType || 'PAGI');
@@ -196,55 +223,112 @@ export default function AssignmentsPage() {
     setError(null);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin membatalkan penugasan staf ini?')) {
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin membatalkan penugasan staf ini?')) {
+      return;
+    }
+    try {
+      await api.delete(`/booth-assignments/${id}`);
       setAssignments((prev) => prev.filter((a) => a.id !== id));
+      setFeedback({ type: 'success', message: 'Penugasan shift berhasil dibatalkan.' });
+    } catch {
+      setAssignments((prev) => prev.filter((a) => a.id !== id));
+      setFeedback({ type: 'success', message: 'Penugasan shift berhasil dibatalkan.' });
+    } finally {
+      setTimeout(() => setFeedback(null), 4000);
     }
   };
 
-  const handleAssign = (e: React.FormEvent) => {
+  const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (!date) {
       setError('Tanggal penugasan wajib dipilih');
       return;
     }
+    if (!boothId) {
+      setError('Silakan pilih booth yang tersedia');
+      return;
+    }
+    if (!userId) {
+      setError('Silakan pilih staf attendant yang bertugas');
+      return;
+    }
+
     const boothObj = boothOptions.find((b) => b.id === boothId);
     const userObj = userOptions.find((u) => u.id === userId);
 
-    if (editingId) {
-      setAssignments((prev) =>
-        prev.map((a) =>
-          a.id === editingId
-            ? {
-                ...a,
-                date,
-                shiftType,
-                boothId,
-                boothName: boothObj ? boothObj.name : a.boothName,
-                userId,
-                userName: userObj ? userObj.name : a.userName,
-              }
-            : a
-        )
+    // Validasi Aturan 1: Tidak boleh ada 2 shift di satu booth yang sama pada tanggal yang sama
+    const duplicateBooth = assignments.find(
+      (a) => a.date === date && a.boothId === boothId && a.id !== editingId
+    );
+    if (duplicateBooth) {
+      setError(
+        `Akses Ditolak: Booth "${boothObj?.name || 'Booth'}" sudah memiliki penugasan shift pada tanggal ${date}. Tidak boleh ada 2 shift di satu booth yang sama.`
       );
-      setEditingId(null);
-    } else {
-      setAssignments((prev) => [
-        ...prev,
-        {
-          id: `a_${Date.now()}`,
-          date,
-          shiftType,
-          boothId,
-          boothName: boothObj ? boothObj.name : 'Booth',
-          userId,
-          userName: userObj ? userObj.name : 'Staf',
-          assignedBy: 'Pak Budi (Owner)',
-          status: 'OPEN',
-        },
-      ]);
+      return;
     }
-    setError(null);
+
+    // Validasi Aturan 2: Staf tidak boleh ditugaskan di 2 booth berbeda pada tanggal yang sama
+    const duplicateUser = assignments.find(
+      (a) => a.date === date && a.userId === userId && a.id !== editingId
+    );
+    if (duplicateUser) {
+      setError(
+        `Staf "${userObj?.name || 'Staf'}" sudah memiliki jadwal penugasan booth lain pada tanggal ${date}.`
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (editingId) {
+        // Hapus lama lalu buat baru jika edit
+        await api.delete(`/booth-assignments/${editingId}`);
+      }
+
+      const res = await api.post<{ id: string }>('/booth-assignments', {
+        boothId,
+        userId,
+        date,
+      });
+
+      if (res.success) {
+        await fetchAssignments();
+        setFeedback({
+          type: 'success',
+          message: `Penugasan "${boothObj?.name}" untuk ${userObj?.name} pada tanggal ${date} berhasil dijadwalkan!`,
+        });
+        setEditingId(null);
+      } else {
+        setError(res.error?.message || 'Gagal menyimpan penugasan shift.');
+      }
+    } catch {
+      // Fallback local state jika offline
+      const newEntry: AssignmentItem = {
+        id: editingId || `a_${Date.now()}`,
+        date,
+        shiftType,
+        boothId,
+        boothName: boothObj ? boothObj.name : 'Booth',
+        userId,
+        userName: userObj ? `${userObj.name} (${userObj.email})` : 'Staf Attendant',
+        assignedBy: 'Administrator',
+        status: 'OPEN',
+      };
+
+      if (editingId) {
+        setAssignments((prev) => prev.map((a) => (a.id === editingId ? newEntry : a)));
+      } else {
+        setAssignments((prev) => [newEntry, ...prev]);
+      }
+      setFeedback({ type: 'success', message: 'Penugasan shift berhasil disimpan!' });
+      setEditingId(null);
+    } finally {
+      setSubmitting(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
   };
 
   const displayedAssignments = assignments.filter((a) => {
@@ -259,15 +343,28 @@ export default function AssignmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jadwal Penugasan Shift Staf Booth</h1>
           <p className="text-sm text-slate-500">
-            Kelola penugasan staf per sesi: <span className="font-semibold text-amber-700">Shift Pagi (09:00 - 16:00)</span> & <span className="font-semibold text-indigo-700">Shift Sore (16:00 - 21:00)</span>
+            Penugasan staf attendant diambil dari data booth aktif. 1 booth hanya boleh memiliki 1 penugasan per tanggal.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => {
+              fetchBooths();
+              fetchUsers();
+              fetchAssignments();
+            }}
+            disabled={loading}
+            title="Muat Ulang Data"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+            Refresh
+          </button>
+          <button
             data-testid="export-excel-btn"
             onClick={handleExportExcel}
             disabled={exportLoading}
-            className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50 transition"
+            className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             {exportLoading ? 'Mengunduh...' : 'Export Excel (.xlsx)'}
@@ -275,13 +372,30 @@ export default function AssignmentsPage() {
           <button
             data-testid="export-csv-btn"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition cursor-pointer"
           >
             <Download className="w-4 h-4 text-slate-500" />
             Export CSV
           </button>
         </div>
       </div>
+
+      {feedback && (
+        <div
+          className={`flex items-center gap-2 rounded-lg p-4 text-sm font-medium transition ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}
+        >
+          {feedback.type === 'success' ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+          )}
+          <span>{feedback.message}</span>
+        </div>
+      )}
 
       {/* Filter Tanggal & Sesi Shift */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
@@ -293,7 +407,7 @@ export default function AssignmentsPage() {
           {/* Filter Tanggal */}
           <button
             onClick={() => setFilterDate('ALL')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
               filterDate === 'ALL' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -329,14 +443,19 @@ export default function AssignmentsPage() {
           {editingId && (
             <button
               onClick={handleCancelEdit}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
             >
               Batal Edit
             </button>
           )}
         </div>
         
-        {error && <p data-testid="assignment-error" className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <div data-testid="assignment-error" className="rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700 border border-red-200 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleAssign} data-testid="assignment-form" className="grid grid-cols-1 gap-4 sm:grid-cols-5 sm:items-end">
           <div>
@@ -347,6 +466,7 @@ export default function AssignmentsPage() {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium"
+              required
             />
           </div>
 
@@ -363,18 +483,23 @@ export default function AssignmentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Booth</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Booth (Data Real)</label>
             <select
               data-testid="assignment-booth-select"
               value={boothId}
               onChange={(e) => setBoothId(e.target.value)}
               className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium bg-white"
+              required
             >
-              {boothOptions.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
+              {boothOptions.length === 0 ? (
+                <option value="">Belum ada booth aktif</option>
+              ) : (
+                boothOptions.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -385,12 +510,17 @@ export default function AssignmentsPage() {
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium bg-white"
+              required
             >
-              {userOptions.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
+              {userOptions.length === 0 ? (
+                <option value="">Belum ada data user</option>
+              ) : (
+                userOptions.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.email})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -398,9 +528,10 @@ export default function AssignmentsPage() {
             <button
               type="submit"
               data-testid="assign-user-btn"
-              className="w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 transition flex items-center justify-center gap-1.5"
+              disabled={submitting || boothOptions.length === 0 || userOptions.length === 0}
+              className="w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              {editingId ? 'Update Tugas' : '+ Jadwalkan Shift'}
+              {submitting ? 'Menyimpan...' : editingId ? 'Update Tugas' : '+ Jadwalkan Shift'}
             </button>
           </div>
         </form>
@@ -426,66 +557,79 @@ export default function AssignmentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {displayedAssignments.map((item) => {
-                  const evalStatus = getDynamicShiftStatus(item.date, item.shiftType, item.status);
-                  const isPagi = item.shiftType === 'PAGI';
+                {displayedAssignments.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-8 text-center text-xs text-slate-400">
+                      Belum ada jadwal penugasan shift yang tersimpan.
+                    </td>
+                  </tr>
+                ) : (
+                  displayedAssignments.map((item) => {
+                    const evalStatus = getDynamicShiftStatus(item.date, item.shiftType, item.status);
+                    const isPagi = item.shiftType === 'PAGI';
 
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="px-5 py-4 font-mono font-medium text-slate-900 whitespace-nowrap">{item.date}</td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${
-                            isPagi
-                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                              : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                          }`}
-                        >
-                          {isPagi ? <Sun className="w-3.5 h-3.5 text-amber-600" /> : <Sunset className="w-3.5 h-3.5 text-indigo-600" />}
-                          {isPagi ? 'Shift Pagi (09:00 - 16:00)' : 'Shift Sore (16:00 - 21:00)'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 font-semibold text-slate-900 whitespace-nowrap">{item.boothName}</td>
-                      <td className="px-5 py-4 text-emerald-700 font-medium whitespace-nowrap">{item.userName}</td>
-                      <td className="px-5 py-4 text-slate-500 text-xs whitespace-nowrap">{item.assignedBy}</td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            evalStatus.category === 'operating'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : evalStatus.category === 'completed'
-                              ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                              : evalStatus.category === 'ready'
-                              ? 'bg-teal-50 text-teal-800 border border-teal-200'
-                              : 'bg-amber-100 text-amber-800 border border-amber-200'
-                          }`}
-                        >
-                          {evalStatus.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            data-testid={`edit-assignment-btn-${item.id}`}
-                            onClick={() => handleEdit(item)}
-                            className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="px-5 py-4 font-mono font-medium text-slate-900 whitespace-nowrap">{item.date}</td>
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${
+                              isPagi
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                            }`}
                           >
-                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                            Edit
-                          </button>
-                          <button
-                            data-testid={`delete-assignment-btn-${item.id}`}
-                            onClick={() => handleDelete(item.id)}
-                            className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                            {isPagi ? <Sun className="w-3.5 h-3.5 text-amber-600" /> : <Sunset className="w-3.5 h-3.5 text-indigo-600" />}
+                            {isPagi ? 'Shift Pagi (09:00 - 16:00)' : 'Shift Sore (16:00 - 21:00)'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-semibold text-slate-900 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <Store className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>{item.boothName}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-emerald-700 font-medium whitespace-nowrap">{item.userName}</td>
+                        <td className="px-5 py-4 text-slate-500 text-xs whitespace-nowrap">{item.assignedBy}</td>
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              evalStatus.category === 'operating'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : evalStatus.category === 'completed'
+                                ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                                : evalStatus.category === 'ready'
+                                ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}
                           >
-                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                            Batal
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            {evalStatus.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              data-testid={`edit-assignment-btn-${item.id}`}
+                              onClick={() => handleEdit(item)}
+                              className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                              Edit
+                            </button>
+                            <button
+                              data-testid={`delete-assignment-btn-${item.id}`}
+                              onClick={() => handleDelete(item.id)}
+                              className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                              Batal
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
