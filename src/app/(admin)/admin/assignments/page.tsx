@@ -119,12 +119,12 @@ export default function AssignmentsPage() {
     }
   };
 
-  // 2. Fetch Real Users (Attendants)
+  // 2. Fetch Real Users (Attendants Only - Admin & Produksi dikecualikan)
   const fetchUsers = async () => {
     try {
-      const res = await api.get<UserOption[]>('/users');
+      const res = await api.get<UserOption[]>('/users?role=BOOTH_ATTENDANT');
       if (res.success && Array.isArray(res.data)) {
-        const attendants = res.data.filter((u) => u.isActive !== false);
+        const attendants = res.data.filter((u) => u.isActive !== false && u.role === 'BOOTH_ATTENDANT');
         setUserOptions(attendants);
         if (attendants.length > 0 && !userId) {
           setUserId(attendants[0].id);
@@ -504,7 +504,7 @@ export default function AssignmentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Staf Bertugas</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Staf Booth (Attendant)</label>
             <select
               data-testid="assignment-user-select"
               value={userId}
@@ -513,7 +513,7 @@ export default function AssignmentsPage() {
               required
             >
               {userOptions.length === 0 ? (
-                <option value="">Belum ada data user</option>
+                <option value="">Belum ada staf booth (BOOTH_ATTENDANT) aktif</option>
               ) : (
                 userOptions.map((u) => (
                   <option key={u.id} value={u.id}>
