@@ -88,7 +88,9 @@ export default function EndShiftPage() {
             <ArrowLeft className="w-4 h-4" />
             Kembali
           </Link>
-          <span className="text-xs text-slate-300">16 Sep 2026</span>
+          <span className="text-xs text-slate-300 font-mono">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
         </div>
         <h1 className="text-xl font-bold">Laporan Akhir Shift</h1>
         <p className="mt-1 text-xs text-slate-300">Booth Alun-Alun Kota — Input Rekap Penjualan & Selisih Uang</p>

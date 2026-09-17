@@ -66,7 +66,9 @@ export default function StartShiftPage() {
             <ArrowLeft className="w-4 h-4" />
             Kembali
           </Link>
-          <span className="text-xs text-emerald-200">16 Sep 2026</span>
+          <span className="text-xs text-emerald-200 font-mono">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
         </div>
         <h1 className="text-xl font-bold">Laporan Awal Shift</h1>
         <p className="mt-1 text-xs text-emerald-100">Booth Alun-Alun Kota</p>
