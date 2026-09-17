@@ -25,35 +25,8 @@ interface BoothItem {
   isActive: boolean;
 }
 
-const defaultBooths: BoothItem[] = [
-  {
-    id: 'b1111111-1111-1111-1111-111111111111',
-    name: 'Booth Alun-Alun Kota',
-    address: 'Jl. Pemuda No. 1, Surabaya',
-    latitude: '-7.2575000',
-    longitude: '112.7521000',
-    isActive: true,
-  },
-  {
-    id: 'b2222222-2222-2222-2222-222222222222',
-    name: 'Booth Kampus UNESA',
-    address: 'Jl. Lidah Wetan, Surabaya',
-    latitude: '-7.3082000',
-    longitude: '112.6738000',
-    isActive: true,
-  },
-  {
-    id: 'b3333333-3333-3333-3333-333333333333',
-    name: 'Booth Stasiun Gubeng',
-    address: 'Jl. Gubeng Masjid, Surabaya',
-    latitude: '-7.2654000',
-    longitude: '112.7519000',
-    isActive: true,
-  },
-];
-
 export default function BoothsPage() {
-  const [boothList, setBoothList] = useState<BoothItem[]>(defaultBooths);
+  const [boothList, setBoothList] = useState<BoothItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
