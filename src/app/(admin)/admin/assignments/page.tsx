@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { Pencil, Trash2, Download, FileSpreadsheet, Calendar, Sun, Sunset } from 'lucide-react';
 import { downloadFile } from '@/lib/api-client';
 
-export type ShiftType = 'PAGI' | 'SORE';
+type ShiftType = 'PAGI' | 'SORE';
 
-export function getDynamicShiftStatus(
+function getDynamicShiftStatus(
   shiftDate: string,
   shiftType: ShiftType = 'PAGI',
   customStatus?: string
