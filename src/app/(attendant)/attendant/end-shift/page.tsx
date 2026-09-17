@@ -11,19 +11,31 @@ import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle,
 
 type ShiftSession = 'PAGI' | 'SORE';
 
+function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Radius bumi dalam meter
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 const MOCK_USER_ASSIGNMENTS: Record<
   string,
   Record<
     ShiftSession,
-    { boothName: string; address: string; cashModal: number } | null
+    { boothName: string; address: string; cashModal: number; lat: number; lng: number } | null
   >
 > = {
   'rina@tehbaling.com': {
-    PAGI: { boothName: 'Booth Alun-Alun Kota', address: 'Jl. Merdeka No. 1, Surabaya', cashModal: 50000 },
+    PAGI: { boothName: 'Booth Alun-Alun Kota', address: 'Jl. Merdeka No. 1, Surabaya', cashModal: 50000, lat: -7.2575, lng: 112.7521 },
     SORE: null,
   },
   'siti@tehbaling.com': {
-    PAGI: { boothName: 'Booth Kampus UNESA', address: 'Jl. Ketintang No. 45, Surabaya', cashModal: 50000 },
+    PAGI: { boothName: 'Booth Kampus UNESA', address: 'Jl. Ketintang No. 45, Surabaya', cashModal: 50000, lat: -7.3082, lng: 112.6738 },
     SORE: null,
   },
 };
@@ -70,7 +82,7 @@ export default function EndShiftPage() {
   }, [user]);
 
   const userAssignments = MOCK_USER_ASSIGNMENTS[currentUserEmail] || {
-    PAGI: { boothName: 'Booth Alun-Alun Kota', address: 'Jl. Merdeka No. 1, Surabaya', cashModal: 50000 },
+    PAGI: { boothName: 'Booth Alun-Alun Kota', address: 'Jl. Merdeka No. 1, Surabaya', cashModal: 50000, lat: -7.2575, lng: 112.7521 },
     SORE: null,
   };
 
@@ -88,6 +100,12 @@ export default function EndShiftPage() {
   const isTimeValid = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
 
   const isAccessAllowed = hasAssignment && isTimeValid;
+
+  const currentDistance =
+    position && assignedShift?.lat && assignedShift?.lng
+      ? calculateDistanceMeters(assignedShift.lat, assignedShift.lng, position.latitude, position.longitude)
+      : null;
+  const isWithinRadius = currentDistance !== null ? currentDistance <= 200 : true;
 
   let lockedReason = '';
   if (!hasAssignment) {
@@ -116,6 +134,11 @@ export default function EndShiftPage() {
     e.preventDefault();
     if (!isAccessAllowed) {
       setError(lockedReason);
+      return;
+    }
+
+    if (position && currentDistance !== null && currentDistance > 200) {
+      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignedShift?.boothName || 'booth'}. Silakan mendekat ke lokasi booth.`);
       return;
     }
 
@@ -338,10 +361,16 @@ export default function EndShiftPage() {
 
         {/* Step 3: Geolocation */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-1.5">
-            <MapPin className="w-4 h-4 text-slate-600" />
-            3. Presensi Lokasi Tutup Shift
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-slate-600" />
+              3. Presensi Lokasi Tutup Shift
+            </h2>
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+              Radius Maks: 200 Meter
+            </span>
+          </div>
+
           <button
             type="button"
             data-testid="gps-capture-end-btn"
@@ -351,15 +380,33 @@ export default function EndShiftPage() {
           >
             {gpsLoading ? 'Mendeteksi Lokasi...' : '📍 Konfirmasi Lokasi Tutup Shift'}
           </button>
-          {position && (
+
+          {position && currentDistance !== null && (
+            <div className={`rounded-lg p-3 text-xs border ${
+              isWithinRadius
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                : 'bg-red-50 border-red-300 text-red-900'
+            }`}>
+              <div className="flex items-center justify-between font-bold">
+                <span>{isWithinRadius ? '✓ Lokasi Sesuai (Dalam Radius)' : '⚠️ Di Luar Radius 200m!'}</span>
+                <span className="font-mono">{Math.round(currentDistance)} meter dari booth</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-600">
+                Akurasi GPS Perangkat: ±{Math.round(position.accuracy)}m ({position.latitude.toFixed(6)}, {position.longitude.toFixed(6)})
+              </p>
+            </div>
+          )}
+
+          {position && currentDistance === null && (
             <p data-testid="gps-end-status" className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
               Lokasi GPS Terverifikasi (Akurasi: {Math.round(position.accuracy)}m)
             </p>
           )}
+
           {gpsError && (
             <p data-testid="gps-end-error" className="text-xs text-red-600 font-semibold">
-              ⚠️ GPS Tidak Terdeteksi
+              ⚠️ GPS Tidak Terdeteksi: {gpsError}
             </p>
           )}
         </div>
