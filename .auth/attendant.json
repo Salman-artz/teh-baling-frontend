@@ -1,0 +1,28 @@
+{
+  "cookies": [
+    {
+      "name": "access_token",
+      "value": "eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImIwZWViYzk5LTljMGItNGVmOC1iYjZkLTZiYjliZDM4MGEyMiIsImVtYWlsIjoicmluYUB0ZWhiYWxpbmcuY29tIiwicm9sZSI6IkJPT1RIX0FUVEVOREFOVCIsImlhdCI6MTc4OTU3MDAxNCwiZXhwIjoxNzg5NTczNjE0fQ.FZQ7e41Tcu5zp2O5Cb7WOPzhwek4PKstd7iSzAWuib0",
+      "domain": "localhost",
+      "path": "/",
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "access_token",
+          "value": "eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImIwZWViYzk5LTljMGItNGVmOC1iYjZkLTZiYjliZDM4MGEyMiIsImVtYWlsIjoicmluYUB0ZWhiYWxpbmcuY29tIiwicm9sZSI6IkJPT1RIX0FUVEVOREFOVCIsImlhdCI6MTc4OTU3MDAxNCwiZXhwIjoxNzg5NTczNjE0fQ.FZQ7e41Tcu5zp2O5Cb7WOPzhwek4PKstd7iSzAWuib0"
+        },
+        {
+          "name": "auth_user",
+          "value": "{\"id\":\"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22\",\"name\":\"Rina (Penjaga Booth 1)\",\"email\":\"rina@tehbaling.com\",\"role\":\"BOOTH_ATTENDANT\"}"
+        }
+      ]
+    }
+  ]
+}

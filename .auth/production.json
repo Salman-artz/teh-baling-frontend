@@ -1,0 +1,28 @@
+{
+  "cookies": [
+    {
+      "name": "access_token",
+      "value": "eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImQwZWViYzk5LTljMGItNGVmOC1iYjZkLTZiYjliZDM4MGE0NCIsImVtYWlsIjoiam9rb0B0ZWhiYWxpbmcuY29tIiwicm9sZSI6IlBST0RVQ1RJT04iLCJpYXQiOjE3ODk1NzAwMTQsImV4cCI6MTc4OTU3MzYxNH0.XE-PNuVHeEcFoIuHPdG5TWAr64Flb_kNs65VcjTs0M0",
+      "domain": "localhost",
+      "path": "/",
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "access_token",
+          "value": "eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImQwZWViYzk5LTljMGItNGVmOC1iYjZkLTZiYjliZDM4MGE0NCIsImVtYWlsIjoiam9rb0B0ZWhiYWxpbmcuY29tIiwicm9sZSI6IlBST0RVQ1RJT04iLCJpYXQiOjE3ODk1NzAwMTQsImV4cCI6MTc4OTU3MzYxNH0.XE-PNuVHeEcFoIuHPdG5TWAr64Flb_kNs65VcjTs0M0"
+        },
+        {
+          "name": "auth_user",
+          "value": "{\"id\":\"d0eebc99-9c0b-4ef8-bb6d-6bb9bd380a44\",\"name\":\"Mas Joko (Staf Produksi)\",\"email\":\"joko@tehbaling.com\",\"role\":\"PRODUCTION\"}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "cookies": [
+    {
+      "name": "access_token",
+      "value": "eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImEwZWViYzk5LTljMGItNGVmOC1iYjZkLTZiYjliZDM4MGExMSIsImVtYWlsIjoiYWRtaW5AdGVoYmFsaW5nLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4OTU3MDAxNCwiZXhwIjoxNzg5NTczNjE0fQ.52qh6mSA9JTOk7KX0GVMaBxtK8DFzlNdXI20sxhr0xY",
+      "domain": "localhost",
+      "path": "/",
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "access_token",
+          "value": "eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImEwZWViYzk5LTljMGItNGVmOC1iYjZkLTZiYjliZDM4MGExMSIsImVtYWlsIjoiYWRtaW5AdGVoYmFsaW5nLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4OTU3MDAxNCwiZXhwIjoxNzg5NTczNjE0fQ.52qh6mSA9JTOk7KX0GVMaBxtK8DFzlNdXI20sxhr0xY"
+        },
+        {
+          "name": "auth_user",
+          "value": "{\"id\":\"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11\",\"name\":\"Pak Budi (Owner)\",\"email\":\"admin@tehbaling.com\",\"role\":\"ADMIN\"}"
+        }
+      ]
+    }
+  ]
+}
