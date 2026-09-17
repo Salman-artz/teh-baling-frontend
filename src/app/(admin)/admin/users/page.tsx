@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Pencil, Trash2, Power, UserPlus, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -14,44 +14,9 @@ interface UserItem {
   createdAt: string;
 }
 
-const defaultUsers: UserItem[] = [
-  {
-    id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    name: 'Pak Budi (Owner)',
-    email: 'admin@tehbaling.com',
-    role: 'ADMIN',
-    isActive: true,
-    createdAt: '2026-09-01',
-  },
-  {
-    id: 'u2',
-    name: 'Rina Attendant',
-    email: 'rina@tehbaling.com',
-    role: 'BOOTH_ATTENDANT',
-    isActive: true,
-    createdAt: '2026-09-05',
-  },
-  {
-    id: 'u3',
-    name: 'Siti Attendant',
-    email: 'siti@tehbaling.com',
-    role: 'BOOTH_ATTENDANT',
-    isActive: true,
-    createdAt: '2026-09-05',
-  },
-  {
-    id: 'u4',
-    name: 'Joko Produksi',
-    email: 'joko@tehbaling.com',
-    role: 'PRODUCTION',
-    isActive: true,
-    createdAt: '2026-09-10',
-  },
-];
-
 export default function UsersPage() {
   const currentUser = useAuthStore((state) => state.user);
-  const [userList, setUserList] = useState<UserItem[]>(defaultUsers);
+  const [userList, setUserList] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
@@ -64,7 +29,7 @@ export default function UsersPage() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get<UserItem[]>('/users');
@@ -72,15 +37,15 @@ export default function UsersPage() {
         setUserList(res.data);
       }
     } catch {
-      // Keep default fallback
+      setFeedback({ type: 'error', message: 'Gagal memuat data pengguna dari server.' });
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
   const filteredUsers =
     selectedRole === 'ALL' ? userList : userList.filter((u) => u.role === selectedRole);
@@ -99,7 +64,7 @@ export default function UsersPage() {
     setEditingId(u.id);
     setName(u.name);
     setEmail(u.email);
-    setPassword(''); // leave blank if unchanged
+    setPassword('');
     setRole(u.role);
     setError(null);
     setShowModal(true);
@@ -127,14 +92,9 @@ export default function UsersPage() {
           message: `Akun "${user.name}" berhasil ${updated.isActive ? 'diaktifkan' : 'dinonaktifkan'}.`,
         });
       } else {
-        // Optimistic fallback
-        const newStatus = !user.isActive;
-        setUserList((prev) =>
-          prev.map((u) => (u.id === user.id ? { ...u, isActive: newStatus } : u))
-        );
         setFeedback({
-          type: 'success',
-          message: `Status akun "${user.name}" berhasil diperbarui.`,
+          type: 'error',
+          message: res.error?.message || 'Gagal mengubah status akun pengguna.',
         });
       }
     } catch {
@@ -162,8 +122,7 @@ export default function UsersPage() {
         setUserList((prev) => prev.filter((u) => u.id !== user.id));
         setFeedback({ type: 'success', message: `Akun "${user.name}" berhasil dihapus.` });
       } else {
-        setUserList((prev) => prev.filter((u) => u.id !== user.id));
-        setFeedback({ type: 'success', message: `Akun "${user.name}" berhasil dihapus.` });
+        setFeedback({ type: 'error', message: res.error?.message || 'Gagal menghapus pengguna.' });
       }
     } catch {
       setFeedback({ type: 'error', message: 'Gagal menghapus pengguna.' });
@@ -201,12 +160,16 @@ export default function UsersPage() {
         const res = await api.patch<UserItem>(`/users/${editingId}`, payload);
         if (res.success && res.data) {
           setUserList((prev) => prev.map((u) => (u.id === editingId ? res.data! : u)));
+          setFeedback({ type: 'success', message: `Data akun "${name}" berhasil diperbarui.` });
+          setName('');
+          setEmail('');
+          setPassword('');
+          setEditingId(null);
+          setShowModal(false);
+          setError(null);
         } else {
-          setUserList((prev) =>
-            prev.map((u) => (u.id === editingId ? { ...u, name, email, role } : u))
-          );
+          setError(res.error?.message || 'Gagal memperbarui pengguna');
         }
-        setFeedback({ type: 'success', message: `Data akun "${name}" berhasil diperbarui.` });
       } else {
         const res = await api.post<UserItem>('/users', {
           name: name.trim(),
@@ -217,28 +180,17 @@ export default function UsersPage() {
 
         if (res.success && res.data) {
           setUserList((prev) => [res.data!, ...prev]);
+          setFeedback({ type: 'success', message: `Akun pengguna "${name}" berhasil dibuat.` });
+          setName('');
+          setEmail('');
+          setPassword('');
+          setEditingId(null);
+          setShowModal(false);
+          setError(null);
         } else {
-          setUserList((prev) => [
-            ...prev,
-            {
-              id: `u_${Date.now()}`,
-              name,
-              email,
-              role,
-              isActive: true,
-              createdAt: new Date().toISOString().slice(0, 10),
-            },
-          ]);
+          setError(res.error?.message || 'Gagal membuat pengguna baru');
         }
-        setFeedback({ type: 'success', message: `Akun pengguna "${name}" berhasil dibuat.` });
       }
-
-      setName('');
-      setEmail('');
-      setPassword('');
-      setEditingId(null);
-      setShowModal(false);
-      setError(null);
     } catch {
       setError('Gagal menyimpan data akun pengguna.');
     } finally {
@@ -282,7 +234,7 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Manajemen Pengguna & Hak Akses</h1>
           <p className="text-sm text-slate-500">
-            Kelola akun staf, hak akses peran sistem, dan status aktif/non-aktif akun login
+            Kelola akun staf, hak akses peran sistem, dan status aktif/non-aktif akun login langsung dari database
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -290,7 +242,7 @@ export default function UsersPage() {
             onClick={fetchUsers}
             disabled={loading}
             title="Muat Ulang Data"
-            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
             Refresh
@@ -366,7 +318,7 @@ export default function UsersPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Nama Lengkap</label>
+              <label className="block text-sm font-medium text-slate-700">Nama Lengkap *</label>
               <input
                 data-testid="user-name-input"
                 type="text"
@@ -374,11 +326,12 @@ export default function UsersPage() {
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
                 placeholder="misal: Budi Santoso"
+                required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Alamat Email (Login)</label>
+              <label className="block text-sm font-medium text-slate-700">Alamat Email (Login) *</label>
               <input
                 data-testid="user-email-input"
                 type="email"
@@ -386,12 +339,13 @@ export default function UsersPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
                 placeholder="budi@tehbaling.com"
+                required
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700">
-                Password {editingId && <span className="text-xs text-slate-400">(Biarkan kosong jika tidak diubah)</span>}
+                Password {editingId ? <span className="text-xs text-slate-400">(Biarkan kosong jika tidak diubah)</span> : '*'}
               </label>
               <input
                 data-testid="user-password-input"
@@ -400,11 +354,12 @@ export default function UsersPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
                 placeholder={editingId ? '••••••••' : 'Minimal 6 karakter'}
+                required={!editingId}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Hak Akses / Peran</label>
+              <label className="block text-sm font-medium text-slate-700">Hak Akses / Peran *</label>
               <select
                 data-testid="user-role-select"
                 value={role}
@@ -440,9 +395,6 @@ export default function UsersPage() {
 
       {/* Tabel Users */}
       <div className="w-full max-w-full space-y-2">
-        <p className="text-[11px] text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 sm:hidden flex items-center gap-1.5 font-medium">
-          👉 <span>Geser tabel ke samping untuk melihat seluruh data</span>
-        </p>
         <div className="w-full max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="w-full max-w-full overflow-x-auto block">
             <table data-testid="users-table" className="w-full min-w-[700px] text-left text-sm text-slate-600">
@@ -456,90 +408,104 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredUsers.map((user) => {
-                  const isSelf = currentUser?.id === user.id;
-                  const isActionLoading = actionLoadingId === user.id;
+                {loading && userList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                        <span>Memuat data pengguna dari database...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      Tidak ada data pengguna yang sesuai filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const isSelf = currentUser?.id === user.id;
+                    const isActionLoading = actionLoadingId === user.id;
 
-                  return (
-                    <tr
-                      key={user.id}
-                      className={`hover:bg-slate-50 transition ${!user.isActive ? 'bg-slate-50/60 opacity-85' : ''}`}
-                    >
-                      <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span>{user.name}</span>
-                          {isSelf && (
-                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                              Anda
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 font-mono text-slate-700 whitespace-nowrap">{user.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{getRoleBadge(user.role)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            user.isActive
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : 'bg-rose-100 text-rose-800 border border-rose-200'
-                          }`}
-                        >
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`hover:bg-slate-50 transition ${!user.isActive ? 'bg-slate-50/60 opacity-85' : ''}`}
+                      >
+                        <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span>{user.name}</span>
+                            {isSelf && (
+                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                                Anda
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-mono text-slate-700 whitespace-nowrap">{user.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">{getRoleBadge(user.role)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`h-2 w-2 rounded-full ${user.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}
-                          ></span>
-                          {user.isActive ? 'Aktif' : 'Nonaktif'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Tombol Nonaktifkan / Aktifkan */}
-                          <button
-                            title={
-                              isSelf
-                                ? 'Anda tidak dapat menonaktifkan akun sendiri'
-                                : user.isActive
-                                ? 'Nonaktifkan akun pengguna ini (mencegah login)'
-                                : 'Aktifkan kembali akun pengguna ini'
-                            }
-                            disabled={isSelf || isActionLoading}
-                            onClick={() => handleToggleStatus(user)}
-                            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed ${
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
                               user.isActive
-                                ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                                : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-rose-100 text-rose-800 border border-rose-200'
                             }`}
                           >
-                            <Power className={`h-3.5 w-3.5 ${isActionLoading ? 'animate-spin' : ''}`} />
-                            {user.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                          </button>
+                            <span
+                              className={`h-2 w-2 rounded-full ${user.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                            ></span>
+                            {user.isActive ? 'Aktif' : 'Nonaktif'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              title={
+                                isSelf
+                                  ? 'Anda tidak dapat menonaktifkan akun sendiri'
+                                  : user.isActive
+                                  ? 'Nonaktifkan akun pengguna ini (mencegah login)'
+                                  : 'Aktifkan kembali akun pengguna ini'
+                              }
+                              disabled={isSelf || isActionLoading}
+                              onClick={() => handleToggleStatus(user)}
+                              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed ${
+                                user.isActive
+                                  ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                  : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                              }`}
+                            >
+                              <Power className={`h-3.5 w-3.5 ${isActionLoading ? 'animate-spin' : ''}`} />
+                              {user.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                            </button>
 
-                          {/* Tombol Edit */}
-                          <button
-                            data-testid={`edit-user-btn-${user.id}`}
-                            onClick={() => handleOpenEdit(user)}
-                            className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition shadow-xs"
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                            Edit
-                          </button>
+                            <button
+                              data-testid={`edit-user-btn-${user.id}`}
+                              onClick={() => handleOpenEdit(user)}
+                              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition shadow-xs"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                              Edit
+                            </button>
 
-                          {/* Tombol Hapus */}
-                          <button
-                            data-testid={`delete-user-btn-${user.id}`}
-                            disabled={isSelf || isActionLoading}
-                            onClick={() => handleDelete(user)}
-                            title={isSelf ? 'Anda tidak dapat menghapus akun sendiri' : 'Hapus akun pengguna'}
-                            className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            <button
+                              data-testid={`delete-user-btn-${user.id}`}
+                              disabled={isSelf || isActionLoading}
+                              onClick={() => handleDelete(user)}
+                              title={isSelf ? 'Anda tidak dapat menghapus akun sendiri' : 'Hapus akun pengguna'}
+                              className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                              Hapus
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

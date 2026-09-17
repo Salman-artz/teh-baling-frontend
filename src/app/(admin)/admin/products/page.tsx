@@ -1,31 +1,59 @@
 'use client';
 
-import { useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Pencil, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { api } from '@/lib/api-client';
+
+interface ProductItem {
+  id: string;
+  name: string;
+  seriesId: string;
+  seriesName?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+}
+
+interface SeriesOption {
+  id: string;
+  name: string;
+}
 
 export default function ProductsPage() {
-  const [productList, setProductList] = useState([
-    { id: 'p1', name: 'Teh Baling Ori Melati', seriesId: 's1', seriesName: 'Original Tea Series', description: 'Teh Asli Melati Khas Baling', isActive: true },
-    { id: 'p2', name: 'Teh Baling Lemon Tea', seriesId: 's1', seriesName: 'Original Tea Series', description: 'Perpaduan Teh Melati dan Lemon Segar', isActive: true },
-    { id: 'p3', name: 'Teh Baling Yakult Ori', seriesId: 's2', seriesName: 'Yakult Series', description: 'Perpaduan Teh Segar dan Yakult Asli', isActive: true },
-    { id: 'p4', name: 'Teh Baling Yakult Lychee', seriesId: 's2', seriesName: 'Yakult Series', description: 'Teh Yakult dengan Sensasi Buah Leci', isActive: true },
-    { id: 'p5', name: 'Teh Baling Fruity Mango', seriesId: 's3', seriesName: 'Fruity Series', description: 'Segarnya Teh dengan Sirup Mangga', isActive: true },
-    { id: 'p6', name: 'Teh Baling Fruity Passion', seriesId: 's3', seriesName: 'Fruity Series', description: 'Segarnya Teh dengan Markisa Segar', isActive: true },
-  ]);
+  const [productList, setProductList] = useState<ProductItem[]>([]);
+  const [seriesOptions, setSeriesOptions] = useState<SeriesOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [selectedSeries, setSelectedSeries] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [seriesId, setSeriesId] = useState('s1');
+  const [seriesId, setSeriesId] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const seriesOptions = [
-    { id: 's1', name: 'Original Tea Series' },
-    { id: 's2', name: 'Yakult Series' },
-    { id: 's3', name: 'Fruity Series' },
-  ];
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [prodRes, seriesRes] = await Promise.all([
+      api.get<ProductItem[]>('/tea-products'),
+      api.get<SeriesOption[]>('/tea-series'),
+    ]);
+
+    if (prodRes.success && prodRes.data) {
+      setProductList(prodRes.data);
+    }
+    if (seriesRes.success && seriesRes.data) {
+      setSeriesOptions(seriesRes.data);
+      if (seriesRes.data.length > 0 && !seriesId) {
+        setSeriesId(seriesRes.data[0].id);
+      }
+    }
+    setLoading(false);
+  }, [seriesId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filteredProducts = selectedSeries === 'ALL'
     ? productList
@@ -34,59 +62,75 @@ export default function ProductsPage() {
   const handleOpenAdd = () => {
     setEditingId(null);
     setName('');
-    setSeriesId('s1');
+    if (seriesOptions.length > 0) {
+      setSeriesId(seriesOptions[0].id);
+    } else {
+      setSeriesId('');
+    }
     setDescription('');
     setError(null);
     setShowModal(true);
   };
 
-  const handleOpenEdit = (item: { id: string; name: string; seriesId: string; description: string }) => {
+  const handleOpenEdit = (item: ProductItem) => {
     setEditingId(item.id);
     setName(item.name);
-    setSeriesId(item.seriesId);
-    setDescription(item.description);
+    setSeriesId(item.seriesId || (seriesOptions[0]?.id || ''));
+    setDescription(item.description || '');
     setError(null);
     setShowModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus produk teh ini?')) {
-      setProductList((prev) => prev.filter((p) => p.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus produk teh ini?')) return;
+    const res = await api.delete(`/tea-products/${id}`);
+    if (res.success) {
+      await fetchData();
+    } else {
+      alert(res.error?.message || 'Gagal menghapus produk');
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('Nama produk wajib diisi');
       return;
     }
-    const seriesObj = seriesOptions.find((s) => s.id === seriesId);
-    const seriesName = seriesObj ? seriesObj.name : 'Series';
-
-    if (editingId) {
-      setProductList((prev) =>
-        prev.map((p) => (p.id === editingId ? { ...p, name, seriesId, seriesName, description } : p))
-      );
-    } else {
-      setProductList((prev) => [
-        ...prev,
-        {
-          id: `p_${Date.now()}`,
-          name,
-          seriesId,
-          seriesName,
-          description,
-          isActive: true,
-        },
-      ]);
+    if (!seriesId) {
+      setError('Pilih kategori series teh terlebih dahulu');
+      return;
     }
 
-    setName('');
-    setDescription('');
-    setEditingId(null);
-    setShowModal(false);
+    setSubmitting(true);
     setError(null);
+
+    let res;
+    if (editingId) {
+      res = await api.patch(`/tea-products/${editingId}`, {
+        name: name.trim(),
+        seriesId,
+        description: description.trim() || undefined,
+      });
+    } else {
+      res = await api.post('/tea-products', {
+        name: name.trim(),
+        seriesId,
+        description: description.trim() || undefined,
+      });
+    }
+
+    setSubmitting(false);
+
+    if (res.success) {
+      setName('');
+      setDescription('');
+      setEditingId(null);
+      setShowModal(false);
+      await fetchData();
+    } else {
+      setError(res.error?.message || 'Gagal menyimpan produk');
+    }
   };
 
   return (
@@ -94,15 +138,25 @@ export default function ProductsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Katalog Produk Teh</h1>
-          <p className="text-sm text-slate-500">Kelola daftar produk minuman Teh Baling per kategori series</p>
+          <p className="text-sm text-slate-500">Kelola daftar produk minuman Teh Baling langsung dari database</p>
         </div>
-        <button
-          data-testid="add-product-btn"
-          onClick={handleOpenAdd}
-          className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition"
-        >
-          + Tambah Produk
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            data-testid="add-product-btn"
+            onClick={handleOpenAdd}
+            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition"
+          >
+            + Tambah Produk
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -131,26 +185,36 @@ export default function ProductsPage() {
               {editingId ? 'Edit Produk Minuman' : 'Tambah Produk Minuman'}
             </h2>
 
-            {error && <p data-testid="product-error" className="text-sm text-red-600">{error}</p>}
+            {error && (
+              <div data-testid="product-error" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-sm text-red-700 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Kategori Series</label>
-              <select
-                data-testid="product-series-select"
-                value={seriesId}
-                onChange={(e) => setSeriesId(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-              >
-                {seriesOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium text-slate-700">Kategori Series *</label>
+              {seriesOptions.length === 0 ? (
+                <p className="text-xs text-amber-600 mt-1">Belum ada data series. Silakan buat Series Teh terlebih dahulu di menu Series.</p>
+              ) : (
+                <select
+                  data-testid="product-series-select"
+                  value={seriesId}
+                  onChange={(e) => setSeriesId(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+                  required
+                >
+                  {seriesOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Nama Produk</label>
+              <label className="block text-sm font-medium text-slate-700">Nama Produk *</label>
               <input
                 data-testid="product-name-input"
                 type="text"
@@ -158,17 +222,19 @@ export default function ProductsPage() {
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
                 placeholder="misal: Teh Baling Cheese Tea"
+                required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Deskripsi</label>
+              <label className="block text-sm font-medium text-slate-700">Deskripsi (Opsional)</label>
               <textarea
                 data-testid="product-desc-input"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
                 placeholder="Komposisi atau keunikan rasa..."
+                rows={3}
               />
             </div>
 
@@ -176,16 +242,18 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
+                disabled={submitting}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Batal
               </button>
               <button
                 type="submit"
+                disabled={submitting}
                 data-testid="product-save-btn"
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
               >
-                {editingId ? 'Update' : 'Simpan'}
+                {submitting ? 'Menyimpan...' : editingId ? 'Update' : 'Simpan'}
               </button>
             </div>
           </form>
@@ -194,9 +262,6 @@ export default function ProductsPage() {
 
       {/* Tabel Produk */}
       <div className="w-full max-w-full space-y-2">
-        <p className="text-[11px] text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 sm:hidden flex items-center gap-1.5 font-medium">
-          👉 <span>Geser tabel ke samping untuk melihat seluruh data</span>
-        </p>
         <div className="w-full max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="w-full max-w-full overflow-x-auto block">
             <table data-testid="products-table" className="w-full min-w-[700px] text-left text-sm text-slate-600">
@@ -210,38 +275,55 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredProducts.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">{p.name}</td>
-                    <td className="px-6 py-4 font-medium text-emerald-700 whitespace-nowrap">{p.seriesName}</td>
-                    <td className="px-6 py-4 min-w-[200px]">{p.description}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                        Aktif
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          data-testid={`edit-product-btn-${p.id}`}
-                          onClick={() => handleOpenEdit(p)}
-                          className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                          Edit
-                        </button>
-                        <button
-                          data-testid={`delete-product-btn-${p.id}`}
-                          onClick={() => handleDelete(p.id)}
-                          className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                          Hapus
-                        </button>
+                {loading && productList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                        <span>Memuat data produk teh dari database...</span>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      Belum ada data produk minuman teh di database. Klik tombol &quot;+ Tambah Produk&quot; di atas.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProducts.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">{p.name}</td>
+                      <td className="px-6 py-4 font-medium text-emerald-700 whitespace-nowrap">{p.seriesName || '-'}</td>
+                      <td className="px-6 py-4 min-w-[200px]">{p.description || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                          Aktif
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            data-testid={`edit-product-btn-${p.id}`}
+                            onClick={() => handleOpenEdit(p)}
+                            className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                            Edit
+                          </button>
+                          <button
+                            data-testid={`delete-product-btn-${p.id}`}
+                            onClick={() => handleDelete(p.id)}
+                            className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

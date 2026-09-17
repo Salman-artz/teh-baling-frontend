@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, downloadFile } from '@/lib/api-client';
+import { RefreshCw } from 'lucide-react';
 
 interface ProductionRecord {
   id: string;
@@ -13,41 +14,11 @@ interface ProductionRecord {
   status: string;
 }
 
-const defaultRecords: ProductionRecord[] = [
-  {
-    id: 'pr_1',
-    date: '2026-09-16',
-    time: '08:30:15 WIB',
-    staffName: 'Joko Produksi (joko@tehbaling.com)',
-    liters: 150,
-    notes: 'Seduhan teh melati kualitas utama, kompor 1 & 2',
-    status: 'Selesai Dimasak',
-  },
-  {
-    id: 'pr_2',
-    date: '2026-09-16',
-    time: '13:15:40 WIB',
-    staffName: 'Joko Produksi (joko@tehbaling.com)',
-    liters: 100,
-    notes: 'Penambahan stok siang persiapan jam ramai',
-    status: 'Selesai Dimasak',
-  },
-  {
-    id: 'pr_3',
-    date: '2026-09-15',
-    time: '08:15:00 WIB',
-    staffName: 'Joko Produksi (joko@tehbaling.com)',
-    liters: 180,
-    notes: 'Seduhan teh melati super + gula cair asli',
-    status: 'Selesai Dimasak',
-  },
-];
-
 export default function AdminProductionPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [records, setRecords] = useState<ProductionRecord[]>(defaultRecords);
+  const [records, setRecords] = useState<ProductionRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -62,9 +33,11 @@ export default function AdminProductionPage() {
         const res = await api.get<ProductionRecord[]>(`/production-reports?${queryParams.toString()}`);
         if (res.success && Array.isArray(res.data)) {
           setRecords(res.data);
+        } else {
+          setRecords([]);
         }
       } catch {
-        // use fallback
+        setRecords([]);
       } finally {
         setLoading(false);
       }
@@ -101,7 +74,7 @@ export default function AdminProductionPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Laporan Memasak Teh Dapur</h1>
           <p className="text-sm text-slate-500">
-            Rekapitulasi riwayat produksi teh per tanggal lengkap dengan timestamp jam dimasak
+            Rekapitulasi riwayat produksi teh per tanggal lengkap dengan timestamp jam dimasak langsung dari database
           </p>
         </div>
         <button
@@ -168,14 +141,10 @@ export default function AdminProductionPage() {
 
       {/* Tabel Laporan Produksi */}
       <div className="w-full max-w-full space-y-2">
-        <p className="text-[11px] text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 sm:hidden flex items-center gap-1.5 font-medium">
-          👉 <span>Geser tabel ke samping untuk melihat seluruh data</span>
-        </p>
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm w-full max-w-full">
           <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">
               Daftar Riwayat Memasak Teh (Per Tanggal & Jam)
-              {loading && <span className="ml-2 text-xs text-amber-600 animate-pulse font-normal">(Memuat data...)</span>}
             </h2>
           </div>
           <div className="overflow-x-auto w-full max-w-full block">
@@ -191,20 +160,37 @@ export default function AdminProductionPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {records.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-mono font-semibold text-slate-900 whitespace-nowrap">{r.date}</td>
-                    <td className="px-6 py-4 font-mono font-bold text-emerald-700 whitespace-nowrap">{r.time}</td>
-                    <td className="px-6 py-4 text-slate-800 font-medium whitespace-nowrap">{r.staffName}</td>
-                    <td className="px-6 py-4 font-extrabold text-slate-900 whitespace-nowrap">{r.liters} Liter</td>
-                    <td className="px-6 py-4 text-slate-500 text-xs min-w-[180px]">{r.notes}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                        {r.status}
-                      </span>
+                {loading && records.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                        <span>Memuat laporan produksi dari database...</span>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                ) : records.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                      Belum ada data laporan produksi memasak teh di database.
+                    </td>
+                  </tr>
+                ) : (
+                  records.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4 font-mono font-semibold text-slate-900 whitespace-nowrap">{r.date}</td>
+                      <td className="px-6 py-4 font-mono font-bold text-emerald-700 whitespace-nowrap">{r.time}</td>
+                      <td className="px-6 py-4 text-slate-800 font-medium whitespace-nowrap">{r.staffName}</td>
+                      <td className="px-6 py-4 font-extrabold text-slate-900 whitespace-nowrap">{r.liters} Liter</td>
+                      <td className="px-6 py-4 text-slate-500 text-xs min-w-[180px]">{r.notes}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

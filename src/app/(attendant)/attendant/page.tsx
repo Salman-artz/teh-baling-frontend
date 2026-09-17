@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatRupiah } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
+import { api } from '@/lib/api-client';
 import {
   Store,
   MapPin,
@@ -19,44 +20,26 @@ import {
 
 type ShiftSession = 'PAGI' | 'SORE';
 
-// Mock jadwal penugasan per user
-const MOCK_USER_ASSIGNMENTS: Record<
-  string,
-  Record<
-    ShiftSession,
-    { boothName: string; address: string; cashModal: number; cups: number; revenue: number } | null
-  >
-> = {
-  // Rina hanya bertugas Shift Pagi di Booth Alun-Alun
-  'rina@tehbaling.com': {
-    PAGI: {
-      boothName: 'Booth Alun-Alun Kota',
-      address: 'Jl. Merdeka No. 1 (Depan Bank Jatim), Surabaya',
-      cashModal: 50000,
-      cups: 95,
-      revenue: 1050000,
-    },
-    SORE: null, // Tidak ada shift sore
-  },
-  // Siti hanya bertugas Shift Pagi di Booth UNESA
-  'siti@tehbaling.com': {
-    PAGI: {
-      boothName: 'Booth Kampus UNESA',
-      address: 'Jl. Ketintang No. 45 (Samping Gerbang Utama), Surabaya',
-      cashModal: 50000,
-      cups: 85,
-      revenue: 950000,
-    },
-    SORE: null, // Tidak ada shift sore
-  },
-};
+interface AssignmentData {
+  id: string;
+  date: string;
+  shiftType: string;
+  boothId: string;
+  boothName: string;
+  boothAddress?: string;
+  userId: string;
+  userEmail?: string;
+  userName: string;
+  status: string;
+}
 
 export default function AttendantHomePage() {
   const { user } = useAuthStore();
   const [activeSession, setActiveSession] = useState<ShiftSession>('PAGI');
   const [wibTimeStr, setWibTimeStr] = useState('');
   const [todayDateFormatted, setTodayDateFormatted] = useState('');
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [assignment, setAssignment] = useState<AssignmentData | null>(null);
+  const [loadingAssignment, setLoadingAssignment] = useState(false);
 
   // Ambil waktu WIB (UTC+7)
   const getWibNow = () => {
@@ -65,19 +48,33 @@ export default function AttendantHomePage() {
     return new Date(utc + 3600000 * 7);
   };
 
-  useEffect(() => {
-    // Ambil data user dari auth store atau local storage
-    if (user?.email) {
-      setCurrentUserEmail(user.email.toLowerCase());
-    } else if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('auth_user');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.email) setCurrentUserEmail(parsed.email.toLowerCase());
-        }
-      } catch {}
+  const fetchTodayAssignment = async () => {
+    setLoadingAssignment(true);
+    const wib = getWibNow();
+    const todayStr = wib.toISOString().split('T')[0]!;
+
+    try {
+      const res = await api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`);
+      if (res.success && Array.isArray(res.data)) {
+        const myAssignment = res.data.find(
+          (a) =>
+            (user?.id && a.userId === user.id) ||
+            (user?.email && a.userEmail?.toLowerCase() === user.email.toLowerCase()) ||
+            (user?.email && a.userName.toLowerCase().includes(user.email.toLowerCase()))
+        );
+        setAssignment(myAssignment || null);
+      } else {
+        setAssignment(null);
+      }
+    } catch {
+      setAssignment(null);
+    } finally {
+      setLoadingAssignment(false);
     }
+  };
+
+  useEffect(() => {
+    fetchTodayAssignment();
 
     const updateTime = () => {
       const wib = getWibNow();
@@ -94,20 +91,7 @@ export default function AttendantHomePage() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // Cek apakah attendant yang login memiliki penugasan di sesi yang dipilih
-  const userAssignments = MOCK_USER_ASSIGNMENTS[currentUserEmail] || {
-    PAGI: {
-      boothName: 'Booth Alun-Alun Kota',
-      address: 'Jl. Merdeka No. 1, Surabaya',
-      cashModal: 50000,
-      cups: 95,
-      revenue: 1050000,
-    },
-    SORE: null,
-  };
-
-  const assignedShift = userAssignments[activeSession];
-  const hasAssignment = Boolean(assignedShift);
+  const hasAssignment = Boolean(assignment);
 
   // Evaluasi Rule Akses Window Shift:
   // - Shift Pagi (09:00 - 16:00 WIB) -> Start: 07:00-16:00 | End: 09:00-18:00
@@ -129,7 +113,7 @@ export default function AttendantHomePage() {
 
   let startDisabledReason = '';
   if (!hasAssignment) {
-    startDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift ${isPagi ? 'pagi' : 'sore'} hari ini.`;
+    startDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift ${isPagi ? 'pagi' : 'sore'} hari ini di database.`;
   } else if (currentHourDec < startWindowMin) {
     startDisabledReason = `Akses buka shift dibuka mulai pukul ${isPagi ? '07:00' : '14:00'} WIB (2 jam sebelum shift).`;
   } else if (currentHourDec > startWindowMax) {
@@ -138,7 +122,7 @@ export default function AttendantHomePage() {
 
   let endDisabledReason = '';
   if (!hasAssignment) {
-    endDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift ${isPagi ? 'pagi' : 'sore'} hari ini.`;
+    endDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift ${isPagi ? 'pagi' : 'sore'} hari ini di database.`;
   } else if (currentHourDec < endWindowMin) {
     endDisabledReason = `Akses tutup shift dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '16:00'} WIB).`;
   } else if (currentHourDec > endWindowMax) {
@@ -172,15 +156,19 @@ export default function AttendantHomePage() {
         <div>
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-extrabold text-white">
-              {hasAssignment ? assignedShift?.boothName : 'Tidak Ada Penugasan Shift'}
+              {loadingAssignment
+                ? 'Memeriksa penugasan shift...'
+                : hasAssignment
+                ? assignment?.boothName
+                : 'Tidak Ada Penugasan Shift'}
             </h2>
             <span className="text-xs text-slate-300 font-medium">{todayDateFormatted}</span>
           </div>
           <p className="text-xs text-slate-300 flex items-center gap-1 mt-1">
             <MapPin className="w-3.5 h-3.5 shrink-0" />
             {hasAssignment
-              ? assignedShift?.address
-              : 'Anda tidak dijadwalkan bertugas pada sesi ini oleh Admin.'}
+              ? assignment?.boothAddress || 'Lokasi Booth Resmi'
+              : 'Anda tidak dijadwalkan bertugas pada hari ini oleh Admin.'}
           </p>
         </div>
 
@@ -213,22 +201,21 @@ export default function AttendantHomePage() {
 
           <span className="font-bold text-emerald-300 text-xs">
             {hasAssignment
-              ? `Modal Kas: ${formatRupiah(assignedShift?.cashModal || 50000)}`
-              : 'Status: Libur / Off Shift'}
+              ? `Modal Standar: ${formatRupiah(50000)}`
+              : 'Status: Off Shift / Belum Ditugaskan'}
           </span>
         </div>
       </div>
 
       {/* Warning Box jika Tidak Ada Jadwal */}
-      {!hasAssignment && (
+      {!hasAssignment && !loadingAssignment && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-900 space-y-1.5 shadow-xs">
           <div className="flex items-center gap-1.5 font-bold text-red-950 text-sm">
             <UserX className="w-4 h-4 text-red-600 shrink-0" />
-            Tidak Ada Jadwal Shift ({activeSession === 'PAGI' ? 'Pagi' : 'Sore'})
+            Tidak Ada Jadwal Shift Hari Ini
           </div>
           <p className="text-slate-700 leading-relaxed">
-            Akun Anda (<strong>{currentUserEmail || 'Attendant'}</strong>) tidak memiliki jadwal penugasan pada{' '}
-            <strong>Shift {activeSession === 'PAGI' ? 'Pagi' : 'Sore'}</strong> hari ini. Seluruh tombol input operasional dinonaktifkan secara otomatis.
+            Akun Anda (<strong>{user?.email || 'Attendant'}</strong>) belum memiliki jadwal penugasan booth pada hari ini di sistem database. Hubungi Admin untuk membuat penugasan shift.
           </p>
         </div>
       )}
@@ -250,6 +237,9 @@ export default function AttendantHomePage() {
               <strong>Tutup Shift:</strong> Dapat diisi mulai pukul{' '}
               <span className="font-bold text-indigo-800">{isPagi ? '09:00' : '16:00'} WIB</span> hingga batas maksimal pukul{' '}
               <span className="font-bold text-indigo-800">{isPagi ? '18:00' : '23:00'} WIB</span> (toleransi 2 jam setelah shift).
+            </li>
+            <li>
+              <strong>Radius Lokasi GPS:</strong> Presensi kehadiran wajib berada dalam batas radius maksimal <span className="font-bold text-emerald-800">200 meter</span> dari titik koordinat booth.
             </li>
           </ul>
         </div>
@@ -347,28 +337,6 @@ export default function AttendantHomePage() {
           )}
         </div>
       </div>
-
-      {/* Estimasi Ringkasan Penjualan Sesi Ini */}
-      {hasAssignment && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <h3 className="font-bold text-slate-900 text-sm">
-            Estimasi Penjualan {activeSession === 'PAGI' ? 'Shift Pagi' : 'Shift Sore'}
-          </h3>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-slate-50 p-4 border border-slate-200/80">
-              <p className="text-xs font-semibold uppercase text-slate-500">Cup Terjual</p>
-              <p className="text-2xl font-black text-emerald-700 mt-1">{assignedShift?.cups || 0} Cup</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-4 border border-slate-200/80">
-              <p className="text-xs font-semibold uppercase text-slate-500">Omzet Pendapatan</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-1">
-                {formatRupiah(assignedShift?.revenue || 0)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

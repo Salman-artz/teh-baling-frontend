@@ -6,9 +6,29 @@ import Link from 'next/link';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
-import { ArrowLeft, Save, Lock, AlertTriangle, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
+
+interface AssignmentData {
+  id: string;
+  date: string;
+  shiftType: string;
+  boothId: string;
+  boothName: string;
+  boothAddress?: string;
+  latitude: number;
+  longitude: number;
+  userId: string;
+  userEmail?: string;
+  userName: string;
+  status: string;
+}
+
+interface CupTypeItem {
+  id: string;
+  name: string;
+}
 
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Radius bumi dalam meter
@@ -22,36 +42,18 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return R * c;
 }
 
-const MOCK_USER_ASSIGNMENTS: Record<
-  string,
-  Record<
-    ShiftSession,
-    { boothName: string; address: string; cashModal: number; lat: number; lng: number } | null
-  >
-> = {
-  'rina@tehbaling.com': {
-    PAGI: { boothName: 'Booth Alun-Alun Kota', address: 'Jl. Merdeka No. 1, Surabaya', cashModal: 50000, lat: -7.2575, lng: 112.7521 },
-    SORE: null,
-  },
-  'siti@tehbaling.com': {
-    PAGI: { boothName: 'Booth Kampus UNESA', address: 'Jl. Ketintang No. 45, Surabaya', cashModal: 50000, lat: -7.3082, lng: 112.6738 },
-    SORE: null,
-  },
-};
-
 export default function StartShiftPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { position, error: gpsError, loading: gpsLoading, requestPosition } = useGeolocation();
   
   const [cashModal, setCashModal] = useState('50000');
-  const [stockKecil, setStockKecil] = useState('50');
-  const [stockMedium, setStockMedium] = useState('50');
-  const [stockBig, setStockBig] = useState('50');
-  const [stockJumbo, setStockJumbo] = useState('50');
+  const [cupTypes, setCupTypes] = useState<CupTypeItem[]>([]);
+  const [cupStocks, setCupStocks] = useState<Record<string, string>>({});
+  const [assignment, setAssignment] = useState<AssignmentData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
 
   // Ambil waktu WIB (UTC+7)
   const getWibNow = () => {
@@ -61,31 +63,49 @@ export default function StartShiftPage() {
   };
 
   useEffect(() => {
-    if (user?.email) {
-      setCurrentUserEmail(user.email.toLowerCase());
-    } else if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('auth_user');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.email) setCurrentUserEmail(parsed.email.toLowerCase());
-        }
-      } catch {}
-    }
-  }, [user]);
+    async function loadData() {
+      setLoading(true);
+      const wib = getWibNow();
+      const todayStr = wib.toISOString().split('T')[0]!;
 
-  const userAssignments = MOCK_USER_ASSIGNMENTS[currentUserEmail] || {
-    PAGI: { boothName: 'Booth Alun-Alun Kota', address: 'Jl. Merdeka No. 1, Surabaya', cashModal: 50000, lat: -7.2575, lng: 112.7521 },
-    SORE: null,
-  };
+      try {
+        const [assignRes, cupRes] = await Promise.all([
+          api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`),
+          api.get<CupTypeItem[]>('/cup-types'),
+        ]);
+
+        if (assignRes.success && Array.isArray(assignRes.data)) {
+          const myAssignment = assignRes.data.find(
+            (a) =>
+              (user?.id && a.userId === user.id) ||
+              (user?.email && a.userEmail?.toLowerCase() === user.email.toLowerCase()) ||
+              (user?.email && a.userName.toLowerCase().includes(user.email.toLowerCase()))
+          );
+          setAssignment(myAssignment || null);
+        }
+
+        if (cupRes.success && Array.isArray(cupRes.data)) {
+          setCupTypes(cupRes.data);
+          const initialStocks: Record<string, string> = {};
+          cupRes.data.forEach((c) => {
+            initialStocks[c.id] = '50';
+          });
+          setCupStocks(initialStocks);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, [user]);
 
   const wib = getWibNow();
   const currentHourDec = wib.getHours() + wib.getMinutes() / 60;
 
   // Auto-detect sesi (Pagi 07:00-16:00 / Sore 14:00-21:00)
   const activeSession: ShiftSession = currentHourDec >= 14.0 ? 'SORE' : 'PAGI';
-  const assignedShift = userAssignments[activeSession];
-  const hasAssignment = Boolean(assignedShift);
+  const hasAssignment = Boolean(assignment);
 
   const isPagi = activeSession === 'PAGI';
   const startWindowMin = isPagi ? 7.0 : 14.0;
@@ -95,19 +115,23 @@ export default function StartShiftPage() {
   const isAccessAllowed = hasAssignment && isTimeValid;
 
   const currentDistance =
-    position && assignedShift?.lat && assignedShift?.lng
-      ? calculateDistanceMeters(assignedShift.lat, assignedShift.lng, position.latitude, position.longitude)
+    position && assignment?.latitude && assignment?.longitude
+      ? calculateDistanceMeters(assignment.latitude, assignment.longitude, position.latitude, position.longitude)
       : null;
   const isWithinRadius = currentDistance !== null ? currentDistance <= 200 : true;
 
   let lockedReason = '';
   if (!hasAssignment) {
-    lockedReason = `Anda tidak memiliki jadwal penugasan pada Shift ${isPagi ? 'Pagi' : 'Sore'} hari ini. Hanya staf yang ditugaskan oleh Admin yang dapat membuka shift.`;
+    lockedReason = `Anda tidak memiliki jadwal penugasan shift hari ini di database. Hanya staf yang ditugaskan oleh Admin yang dapat membuka shift.`;
   } else if (currentHourDec < startWindowMin) {
     lockedReason = `Akses buka shift baru dibuka pukul ${isPagi ? '07:00' : '14:00'} WIB (2 jam sebelum jam operasional dimulai).`;
   } else if (currentHourDec > startWindowMax) {
     lockedReason = `Waktu presensi buka shift telah ditutup (Batas maksimal pukul ${isPagi ? '16:00' : '21:00'} WIB).`;
   }
+
+  const handleStockChange = (cupId: string, val: string) => {
+    setCupStocks((prev) => ({ ...prev, [cupId]: val }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +141,7 @@ export default function StartShiftPage() {
     }
 
     if (position && currentDistance !== null && currentDistance > 200) {
-      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignedShift?.boothName || 'booth'}. Silakan mendekat ke lokasi booth.`);
+      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignment?.boothName || 'booth'}. Silakan mendekat ke lokasi booth.`);
       return;
     }
 
@@ -130,14 +154,14 @@ export default function StartShiftPage() {
 
     setSubmitting(true);
     try {
+      const stockItems = cupTypes.map((c) => ({
+        cupTypeId: c.id,
+        qtyInitial: parseInt(cupStocks[c.id] || '0', 10) || 0,
+      }));
+
       const res = await api.post('/daily-reports/start', {
         cashModal: modal,
-        stockItems: [
-          { cupTypeId: 'c1111111-1111-1111-1111-111111111111', qtyInitial: parseInt(stockKecil, 10) || 0 },
-          { cupTypeId: 'c2222222-2222-2222-2222-222222222222', qtyInitial: parseInt(stockMedium, 10) || 0 },
-          { cupTypeId: 'c3333333-3333-3333-3333-333333333333', qtyInitial: parseInt(stockBig, 10) || 0 },
-          { cupTypeId: 'c4444444-4444-4444-4444-444444444444', qtyInitial: parseInt(stockJumbo, 10) || 0 },
-        ],
+        stockItems,
         gpsLatitude: position?.latitude ?? null,
         gpsLongitude: position?.longitude ?? null,
         gpsAccuracy: position?.accuracy ?? null,
@@ -146,7 +170,7 @@ export default function StartShiftPage() {
       if (res.success) {
         router.push('/attendant');
       } else {
-        setError(!res.success ? res.error.message : 'Gagal menyimpan laporan awal.');
+        setError(res.error?.message || 'Gagal menyimpan laporan awal shift.');
       }
     } catch {
       setError('Terjadi kesalahan jaringan.');
@@ -154,6 +178,15 @@ export default function StartShiftPage() {
       setSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 space-y-3">
+        <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+        <p className="text-sm text-slate-500">Memeriksa jadwal penugasan shift...</p>
+      </div>
+    );
+  }
 
   // JIKA AKSES TERKUNCI -> TAMPILKAN LAYAR LOCK PENUH
   if (!isAccessAllowed) {
@@ -192,7 +225,7 @@ export default function StartShiftPage() {
             <div>
               <p className="font-bold">Info Shift Hari Ini:</p>
               <p className="mt-0.5 text-slate-700">
-                Akun: <strong className="text-slate-900">{currentUserEmail || 'Attendant'}</strong>
+                Akun: <strong className="text-slate-900">{user?.email || 'Attendant'}</strong>
                 <br />
                 Sesi Terdeteksi: <strong>Shift {isPagi ? 'Pagi (09:00 - 16:00)' : 'Sore (16:00 - 21:00)'}</strong>
               </p>
@@ -229,7 +262,7 @@ export default function StartShiftPage() {
           </span>
         </div>
         <h1 className="text-xl font-bold">Laporan Awal Shift ({isPagi ? 'Pagi' : 'Sore'})</h1>
-        <p className="mt-1 text-xs text-emerald-100">{assignedShift?.boothName || 'Booth Teh Baling'}</p>
+        <p className="mt-1 text-xs text-emerald-100">{assignment?.boothName || 'Booth Teh Baling'}</p>
       </div>
 
       {error && (
@@ -257,52 +290,24 @@ export default function StartShiftPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <h2 className="font-semibold text-slate-900">2. Stok Cup Awal Dibawa</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Cup Kecil</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                data-testid="stock-initial-kecil"
-                value={stockKecil}
-                onChange={(e) => setStockKecil(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 font-semibold"
-              />
+          {cupTypes.length === 0 ? (
+            <p className="text-xs text-slate-500">Memuat varian ukuran cup dari database...</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {cupTypes.map((c) => (
+                <div key={c.id}>
+                  <label className="block text-xs font-medium text-slate-600">{c.name}</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={cupStocks[c.id] || '0'}
+                    onChange={(e) => handleStockChange(c.id, e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 font-semibold"
+                  />
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Cup Medium</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                data-testid="stock-initial-medium"
-                value={stockMedium}
-                onChange={(e) => setStockMedium(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 font-semibold"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Cup Big</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                data-testid="stock-initial-big"
-                value={stockBig}
-                onChange={(e) => setStockBig(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 font-semibold"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600">Cup Jumbo</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                data-testid="stock-initial-jumbo"
-                value={stockJumbo}
-                onChange={(e) => setStockJumbo(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 font-semibold"
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">

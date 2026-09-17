@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 
 interface ProductionItem {
   id: string;
@@ -14,33 +14,16 @@ interface ProductionItem {
   status: string;
 }
 
-const defaultHistory: ProductionItem[] = [
-  {
-    id: 'pr_1',
-    date: '2026-09-16',
-    time: '08:30:15 WIB',
-    liters: 150,
-    notes: 'Seduhan teh melati kualitas utama, kompor 1 & 2',
-    status: 'Selesai Dimasak',
-  },
-  {
-    id: 'pr_2',
-    date: '2026-09-16',
-    time: '13:15:40 WIB',
-    liters: 100,
-    notes: 'Penambahan stok siang persiapan jam ramai',
-    status: 'Selesai Dimasak',
-  },
-];
-
 export default function ProductionHistoryPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [historyList, setHistoryList] = useState<ProductionItem[]>(defaultHistory);
+  const [historyList, setHistoryList] = useState<ProductionItem[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function fetchHistory() {
+      setLoading(true);
       try {
         const queryParams = new URLSearchParams();
         if (fromDate) queryParams.append('fromDate', fromDate);
@@ -50,9 +33,13 @@ export default function ProductionHistoryPage() {
         const res = await api.get<ProductionItem[]>(`/production-reports?${queryParams.toString()}`);
         if (res.success && Array.isArray(res.data)) {
           setHistoryList(res.data);
+        } else {
+          setHistoryList([]);
         }
       } catch {
-        // use default fallback
+        setHistoryList([]);
+      } finally {
+        setLoading(false);
       }
     }
     fetchHistory();
@@ -72,7 +59,7 @@ export default function ProductionHistoryPage() {
         </div>
         <h1 className="text-xl font-bold">Riwayat Memasak Teh</h1>
         <p className="mt-1 text-xs text-slate-300">
-          Daftar laporan volume teh yang telah Anda masak per tanggal dan jam
+          Daftar laporan volume teh yang telah Anda masak per tanggal dan jam langsung dari database
         </p>
       </div>
 
@@ -111,30 +98,41 @@ export default function ProductionHistoryPage() {
       </div>
 
       <div className="space-y-3">
-        {historyList.map((item) => (
-          <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-500">{item.date}</p>
-                <p className="text-sm font-extrabold text-emerald-700 font-mono">{item.time}</p>
-              </div>
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                {item.liters} Liter
-              </span>
-            </div>
-
-            {item.notes && (
-              <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                📝 {item.notes}
-              </p>
-            )}
-
-            <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100">
-              <span>Status: {item.status}</span>
-              <span>Terverifikasi Dapur</span>
-            </div>
+        {loading && historyList.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500 flex items-center justify-center gap-2">
+            <RefreshCw className="h-4 w-4 animate-spin text-amber-600" />
+            <span>Memuat data riwayat memasak...</span>
           </div>
-        ))}
+        ) : historyList.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+            Belum ada riwayat memasak teh yang tercatat di database.
+          </div>
+        ) : (
+          historyList.map((item) => (
+            <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase text-slate-500">{item.date}</p>
+                  <p className="text-sm font-extrabold text-emerald-700 font-mono">{item.time}</p>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+                  {item.liters} Liter
+                </span>
+              </div>
+
+              {item.notes && (
+                <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  📝 {item.notes}
+                </p>
+              )}
+
+              <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100">
+                <span>Status: {item.status}</span>
+                <span>Terverifikasi Dapur</span>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

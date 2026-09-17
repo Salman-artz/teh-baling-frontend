@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { RefreshCw } from 'lucide-react';
 
 interface ChartDataItem {
   label: string;
@@ -26,33 +27,47 @@ interface ChartDataItem {
   cups?: number;
 }
 
+interface BoothSummaryItem {
+  id: string;
+  name: string;
+  attendantName: string;
+  status: string;
+  revenue: number;
+  variance: number;
+}
+
 export default function AdminDashboardPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [period, setPeriod] = useState<'hourly' | 'daily' | 'monthly'>('hourly');
   const [selectedBooth, setSelectedBooth] = useState('ALL');
   const [chartData, setChartData] = useState<ChartDataItem[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
 
   const [dashboardData, setDashboardData] = useState<{
     totalRevenue: number;
     totalCupsSold: number;
     activeBooths: number;
-    booths: Array<{ id: string; name: string; attendantName: string; status: string; revenue: number; variance: number }>;
+    booths: BoothSummaryItem[];
   }>({
-    totalRevenue: 3450000,
-    totalCupsSold: 320,
-    activeBooths: 2,
-    booths: [
-      { id: 'b1111111-1111-1111-1111-111111111111', name: 'Booth Alun-Alun Kota', attendantName: 'Rina', status: 'Beroperasi', revenue: 1850000, variance: 0 },
-      { id: 'b2222222-2222-2222-2222-222222222222', name: 'Booth Kampus UNESA', attendantName: 'Siti', status: 'Beroperasi', revenue: 1600000, variance: -5000 },
-    ],
+    totalRevenue: 0,
+    totalCupsSold: 0,
+    activeBooths: 0,
+    booths: [],
   });
+
+  const fetchDashboardData = () => {
+    setLoadingDashboard(true);
+    api.get<typeof dashboardData>('/dashboard/today')
+      .then((res) => {
+        if (res.success && res.data) setDashboardData(res.data);
+      })
+      .finally(() => setLoadingDashboard(false));
+  };
 
   useEffect(() => {
     setIsMounted(true);
-    api.get<typeof dashboardData>('/dashboard/today').then((res) => {
-      if (res.success && res.data) setDashboardData(res.data);
-    });
+    fetchDashboardData();
   }, []);
 
   // Fetch dynamic chart data based on active filters
@@ -94,9 +109,19 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard Penjualan Teh Baling</h1>
-        <p className="text-sm text-slate-500">Ringkasan transaksi real-time & analisis tren penjualan harian dan mingguan</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard Penjualan Teh Baling</h1>
+          <p className="text-sm text-slate-500">Ringkasan transaksi real-time dari database PostgreSQL & analisis tren penjualan</p>
+        </div>
+        <button
+          onClick={fetchDashboardData}
+          disabled={loadingDashboard}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 text-slate-500 ${loadingDashboard ? 'animate-spin' : ''}`} />
+          Refresh Data
+        </button>
       </div>
 
       {/* Ringkasan Metric Cards */}
@@ -106,23 +131,27 @@ export default function AdminDashboardPage() {
           <p data-testid="total-revenue" className="mt-2 text-3xl font-bold text-slate-900">
             {formatRupiah(dashboardData.totalRevenue)}
           </p>
-          <p className="mt-1 text-xs text-emerald-600 font-semibold">▲ +12% dibanding kemarin</p>
+          <p className="mt-1 text-xs text-emerald-600 font-semibold">● Data real dari closing booth</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Total Cup Terjual</p>
+          <p className="text-sm font-medium text-slate-500">Total Estimasi Cup Terjual</p>
           <p data-testid="cups-sold" className="mt-2 text-3xl font-bold text-emerald-600">
             {dashboardData.totalCupsSold} Cup
           </p>
-          <p className="mt-1 text-xs text-slate-500">Rata-rata 160 cup / booth</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {dashboardData.activeBooths > 0
+              ? `Rata-rata ${Math.round(dashboardData.totalCupsSold / dashboardData.activeBooths)} cup / booth`
+              : 'Belum ada transaksi'}
+          </p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Status Stand Penjualan</p>
+          <p className="text-sm font-medium text-slate-500">Jumlah Booth Aktif</p>
           <p data-testid="active-booths" className="mt-2 text-3xl font-bold text-slate-900">
-            {dashboardData.activeBooths} / 2 Booth
+            {dashboardData.activeBooths} Booth
           </p>
-          <p className="mt-1 text-xs text-emerald-600 font-semibold">● 100% Beroperasi Normal</p>
+          <p className="mt-1 text-xs text-emerald-600 font-semibold">● Terdaftar di Master Data</p>
         </div>
       </div>
 
@@ -144,9 +173,11 @@ export default function AdminDashboardPage() {
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-900 font-medium focus:border-emerald-500 focus:outline-none"
               >
                 <option value="ALL">Semua Booth (Komparasi)</option>
-                <option value="b1111111-1111-1111-1111-111111111111">Booth Alun-Alun Kota</option>
-                <option value="b2222222-2222-2222-2222-222222222222">Booth Kampus UNESA</option>
-                <option value="b3333333-3333-3333-3333-333333333333">Booth Stasiun Gubeng</option>
+                {dashboardData.booths.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -305,35 +336,52 @@ export default function AdminDashboardPage() {
           </div>
           <div className="overflow-x-auto w-full max-w-full block">
             <table data-testid="booth-table" className="w-full min-w-[650px] text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-6 py-3 whitespace-nowrap">Nama Booth</th>
-                <th className="px-6 py-3 whitespace-nowrap">Penjaga (Attendant)</th>
-                <th className="px-6 py-3 whitespace-nowrap">Status</th>
-                <th className="px-6 py-3 whitespace-nowrap">Total Revenue</th>
-                <th className="px-6 py-3 whitespace-nowrap">Selisih Kas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {dashboardData.booths.map((booth) => (
-                <tr key={booth.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4 font-semibold text-slate-900">{booth.name}</td>
-                  <td className="px-6 py-4">{booth.attendantName}</td>
-                  <td className="px-6 py-4">
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                      {booth.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">{formatRupiah(booth.revenue)}</td>
-                  <td className={`px-6 py-4 font-semibold ${booth.variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {formatRupiah(booth.variance)}
-                  </td>
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-6 py-3 whitespace-nowrap">Nama Booth</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Penjaga (Attendant)</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Status</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Total Revenue</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Selisih Kas</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {loadingDashboard && dashboardData.booths.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                        <span>Memuat status booth dari database...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : dashboardData.booths.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      Belum ada booth yang terdaftar di database.
+                    </td>
+                  </tr>
+                ) : (
+                  dashboardData.booths.map((booth) => (
+                    <tr key={booth.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4 font-semibold text-slate-900">{booth.name}</td>
+                      <td className="px-6 py-4">{booth.attendantName}</td>
+                      <td className="px-6 py-4">
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                          {booth.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-slate-900">{formatRupiah(booth.revenue)}</td>
+                      <td className={`px-6 py-4 font-semibold ${booth.variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {formatRupiah(booth.variance)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

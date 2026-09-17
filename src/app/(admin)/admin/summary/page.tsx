@@ -1,20 +1,76 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { formatRupiah } from '@/lib/utils';
-import { downloadFile } from '@/lib/api-client';
+import { api, downloadFile } from '@/lib/api-client';
+import { RefreshCw } from 'lucide-react';
+
+interface SummaryItem {
+  id?: string;
+  date: string;
+  boothName: string;
+  revenue: number;
+  cupsSold: number;
+  variance: number;
+  status?: string;
+}
+
+interface BoothOption {
+  id: string;
+  name: string;
+}
 
 export default function SummaryPage() {
-  const [fromDate, setFromDate] = useState('2026-09-01');
-  const [toDate, setToDate] = useState('2026-09-16');
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+
+  const startOfMonth = `${year}-${month}-01`;
+  const todayStr = `${year}-${month}-${day}`;
+
+  const [fromDate, setFromDate] = useState(startOfMonth);
+  const [toDate, setToDate] = useState(todayStr);
   const [boothId, setBoothId] = useState('ALL');
-  const [data] = useState<Array<{ date: string; boothName: string; revenue: number; cupsSold: number; variance: number }>>([
-    { date: '2026-09-16', boothName: 'Booth Alun-Alun Kota', revenue: 1850000, cupsSold: 170, variance: 0 },
-    { date: '2026-09-16', boothName: 'Booth Kampus UNESA', revenue: 1600000, cupsSold: 150, variance: -5000 },
-  ]);
+  const [boothOptions, setBoothOptions] = useState<BoothOption[]>([]);
+  const [data, setData] = useState<SummaryItem[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [salesExportLoading, setSalesExportLoading] = useState(false);
   const [shiftExportLoading, setShiftExportLoading] = useState(false);
+
+  // Fetch booth options
+  useEffect(() => {
+    async function loadBooths() {
+      const res = await api.get<BoothOption[]>('/booths');
+      if (res.success && Array.isArray(res.data)) {
+        setBoothOptions(res.data);
+      }
+    }
+    loadBooths();
+  }, []);
+
+  const fetchSummary = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<SummaryItem[]>(
+        `/dashboard/summary-table?from=${fromDate}&to=${toDate}&boothId=${boothId}`
+      );
+      if (res.success && Array.isArray(res.data)) {
+        setData(res.data);
+      } else {
+        setData([]);
+      }
+    } catch {
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fromDate, toDate, boothId]);
+
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
   const handleExportSales = async () => {
     setSalesExportLoading(true);
@@ -45,9 +101,17 @@ export default function SummaryPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Ringkasan & Export Laporan</h1>
-          <p className="text-sm text-slate-500">Unduh rekap penjualan dan jadwal shift jaga staf dalam format Excel</p>
+          <p className="text-sm text-slate-500">Unduh rekap penjualan dan jadwal shift jaga staf dari database dalam format Excel</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={fetchSummary}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
           <button
             data-testid="export-excel-btn"
             onClick={handleExportSales}
@@ -96,14 +160,22 @@ export default function SummaryPage() {
             onChange={(e) => setBoothId(e.target.value)}
             className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900"
           >
-            <option value="ALL">Semua Booth</option>
-            <option value="b1111111-1111-1111-1111-111111111111">Booth Alun-Alun Kota</option>
-            <option value="b2222222-2222-2222-2222-222222222222">Booth Kampus UNESA</option>
+            <option value="ALL">Semua Booth ({boothOptions.length})</option>
+            {boothOptions.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {data.length === 0 ? (
+      {loading && data.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500 flex items-center justify-center gap-2">
+          <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+          <span>Memuat data ringkasan penjualan...</span>
+        </div>
+      ) : data.length === 0 ? (
         <div data-testid="empty-summary-state" className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500">
           Tidak ada data penjualan pada rentang tanggal ini.
         </div>
