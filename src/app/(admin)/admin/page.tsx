@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api-client';
 import { formatRupiah } from '@/lib/utils';
 import {
@@ -20,9 +20,6 @@ import { RefreshCw } from 'lucide-react';
 interface ChartDataItem {
   label: string;
   revenue?: number;
-  alunAlun?: number;
-  unesa?: number;
-  gubeng?: number;
   totalRevenue?: number;
   cups?: number;
 }
@@ -56,19 +53,19 @@ export default function AdminDashboardPage() {
     booths: [],
   });
 
-  const fetchDashboardData = () => {
+  const fetchDashboardData = useCallback(() => {
     setLoadingDashboard(true);
     api.get<typeof dashboardData>('/dashboard/today')
       .then((res) => {
         if (res.success && res.data) setDashboardData(res.data);
       })
       .finally(() => setLoadingDashboard(false));
-  };
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   // Fetch dynamic chart data based on active filters
   useEffect(() => {
@@ -78,10 +75,17 @@ export default function AdminDashboardPage() {
       .then((res) => {
         if (res.success && Array.isArray(res.data)) {
           setChartData(res.data);
+        } else {
+          setChartData([]);
         }
       })
+      .catch(() => setChartData([]))
       .finally(() => setIsLoadingChart(false));
   }, [isMounted, period, selectedBooth]);
+
+  const selectedBoothObj = dashboardData.booths.find((b) => b.id === selectedBooth);
+  const chartTitle = selectedBooth === 'ALL' ? 'Total Penjualan (Seluruh Booth)' : (selectedBoothObj?.name || 'Booth Terpilih');
+  const revenueDataKey = selectedBooth === 'ALL' ? 'totalRevenue' : 'revenue';
 
   const CustomTooltip = ({
     active,
@@ -98,7 +102,7 @@ export default function AdminDashboardPage() {
           <p className="font-bold text-slate-800">{label}</p>
           {payload.map((entry, index: number) => (
             <p key={`item-${index}`} style={{ color: entry.color }} className="font-semibold">
-              {entry.name}: {typeof entry.value === 'number' && entry.value > 1000 ? formatRupiah(entry.value) : `${entry.value} Cup`}
+              {entry.name}: {typeof entry.value === 'number' && entry.value > 1000 ? formatRupiah(entry.value) : `${entry.value || 0} Cup`}
             </p>
           ))}
         </div>
@@ -172,7 +176,7 @@ export default function AdminDashboardPage() {
                 onChange={(e) => setSelectedBooth(e.target.value)}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-900 font-medium focus:border-emerald-500 focus:outline-none"
               >
-                <option value="ALL">Semua Booth (Komparasi)</option>
+                <option value="ALL">Semua Booth ({dashboardData.booths.length})</option>
                 {dashboardData.booths.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
@@ -221,51 +225,14 @@ export default function AdminDashboardPage() {
             <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
               Memuat grafik data penjualan...
             </div>
-          ) : selectedBooth !== 'ALL' ? (
-            /* Grafik Single Booth (Revenue & Cups) */
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorSingle" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#059669" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
-                <YAxis
-                  stroke="#64748b"
-                  fontSize={12}
-                  tickFormatter={(val) => `Rp${val / 1000}k`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  name="Pendapatan (IDR)"
-                  stroke="#059669"
-                  fillOpacity={1}
-                  fill="url(#colorSingle)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
           ) : period === 'hourly' ? (
-            /* Grafik Komparasi Jam Multi-Booth */
+            /* Area Chart for Hourly Trend */
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorAlun" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#059669" stopOpacity={0.8} />
                     <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorUnesa" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0284c7" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#0284c7" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorGubeng" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#d97706" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#d97706" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -279,32 +246,16 @@ export default function AdminDashboardPage() {
                 <Legend wrapperStyle={{ paddingTop: '10px' }} />
                 <Area
                   type="monotone"
-                  dataKey="alunAlun"
-                  name="Booth Alun-Alun"
+                  dataKey={revenueDataKey}
+                  name={chartTitle}
                   stroke="#059669"
                   fillOpacity={1}
-                  fill="url(#colorAlun)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="unesa"
-                  name="Booth Kampus UNESA"
-                  stroke="#0284c7"
-                  fillOpacity={1}
-                  fill="url(#colorUnesa)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="gubeng"
-                  name="Booth Stasiun Gubeng"
-                  stroke="#d97706"
-                  fillOpacity={1}
-                  fill="url(#colorGubeng)"
+                  fill="url(#colorRevenue)"
                 />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            /* Grafik Komparasi Bar Multi-Booth */
+            /* Bar Chart for Daily / Monthly comparison */
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -316,9 +267,12 @@ export default function AdminDashboardPage() {
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                <Bar dataKey="alunAlun" name="Booth Alun-Alun" fill="#059669" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="unesa" name="Booth Kampus UNESA" fill="#0284c7" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="gubeng" name="Booth Stasiun Gubeng" fill="#d97706" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey={revenueDataKey}
+                  name={chartTitle}
+                  fill="#059669"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           )}
