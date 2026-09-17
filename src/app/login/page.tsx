@@ -111,11 +111,10 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="admin@tehbaling.com"
               className={`mt-1.5 block w-full rounded-lg px-3.5 py-2.5 text-sm transition-all duration-200 focus:outline-none focus:ring-2 ${
                 email
                   ? 'border-2 border-emerald-800 bg-slate-100 text-slate-950 font-bold shadow-xs focus:border-emerald-900 focus:ring-emerald-800/30 focus:bg-white'
-                  : 'border border-slate-300 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:border-emerald-700 focus:ring-emerald-700/20 focus:bg-white'
+                  : 'border border-slate-300 bg-slate-50 text-slate-900 focus:border-emerald-700 focus:ring-emerald-700/20 focus:bg-white'
               }`}
             />
           </div>
@@ -128,11 +127,10 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="••••••••"
               className={`mt-1.5 block w-full rounded-lg px-3.5 py-2.5 text-sm transition-all duration-200 focus:outline-none focus:ring-2 ${
                 password
                   ? 'border-2 border-emerald-800 bg-slate-100 text-slate-950 font-bold shadow-xs focus:border-emerald-900 focus:ring-emerald-800/30 focus:bg-white'
-                  : 'border border-slate-300 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:border-emerald-700 focus:ring-emerald-700/20 focus:bg-white'
+                  : 'border border-slate-300 bg-slate-50 text-slate-900 focus:border-emerald-700 focus:ring-emerald-700/20 focus:bg-white'
               }`}
             />
           </div>
