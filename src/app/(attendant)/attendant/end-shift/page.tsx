@@ -40,9 +40,11 @@ interface CupTypeItem {
   isActive?: boolean;
 }
 
-interface SeriesCupRule {
-  seriesId: string;
-  seriesName: string;
+interface ProductCupRule {
+  productId?: string;
+  productName?: string;
+  seriesId?: string;
+  seriesName?: string;
   cupPrices: Record<string, { enabled: boolean; price: number }>;
 }
 
@@ -119,7 +121,7 @@ export default function EndShiftPage() {
           api.get<ProductItem[]>('/tea-products'),
           api.get<CupTypeItem[]>('/cup-types'),
           api.get<TodayReportData>(`/daily-reports/today?date=${todayStr}`),
-          api.get<SeriesCupRule[]>('/cup-rules'),
+          api.get<ProductCupRule[]>('/cup-rules'),
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
@@ -172,12 +174,12 @@ export default function EndShiftPage() {
           : defaultProducts;
         setProducts(rawProducts);
 
-        // Muat aturan mapping cup & harga per series dari backend & localStorage
-        let storedRules: SeriesCupRule[] = [];
+        // Muat aturan mapping cup & harga per produk dari backend & localStorage
+        let storedRules: ProductCupRule[] = [];
         if (rulesRes.success && Array.isArray(rulesRes.data) && rulesRes.data.length > 0) {
           storedRules = rulesRes.data;
         } else if (typeof window !== 'undefined') {
-          const rulesStr = localStorage.getItem('teh_baling_cup_rules');
+          const rulesStr = localStorage.getItem('teh_baling_product_cup_rules') || localStorage.getItem('teh_baling_cup_rules');
           if (rulesStr) {
             try {
               storedRules = JSON.parse(rulesStr);
@@ -187,16 +189,16 @@ export default function EndShiftPage() {
           }
         }
 
-        // Buat daftar kombinasi produk x ukuran cup dengan harga dari matriks mapping series
+        // Buat daftar kombinasi produk x ukuran cup dengan harga dari matriks mapping produk
         const saleItemsList: ProductCupSaleItem[] = [];
         rawProducts.forEach((p) => {
-          // Cari aturan mapping series yang cocok
+          // Cari aturan mapping produk yang cocok
           const matchedRule = storedRules.find(
             (r) =>
+              (r.productId && r.productId === p.id) ||
+              (r.productName && r.productName.trim().toLowerCase() === p.name.trim().toLowerCase()) ||
               (p.seriesId && r.seriesId === p.seriesId) ||
-              (p.seriesName && r.seriesName && r.seriesName.trim().toLowerCase() === p.seriesName.trim().toLowerCase()) ||
-              (p.name && r.seriesName && p.name.toLowerCase().includes(r.seriesName.toLowerCase().replace(' series', '').trim())) ||
-              (p.name && r.seriesName && r.seriesName.toLowerCase().includes(p.name.toLowerCase().trim()))
+              (p.seriesName && r.seriesName && r.seriesName.trim().toLowerCase() === p.seriesName.trim().toLowerCase())
           );
 
           activeCups.forEach((cup) => {
@@ -212,7 +214,7 @@ export default function EndShiftPage() {
                 isEnabled = false;
               }
             } else {
-              // Jika aturan belum ada, default semua cup aktif tersedia
+              // Jika aturan belum diatur spesifik, default semua cup aktif tersedia
               isEnabled = true;
               price = cup.price || 10000;
             }

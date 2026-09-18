@@ -11,9 +11,11 @@ interface CupTypeItem {
   isActive?: boolean;
 }
 
-interface SeriesOption {
+interface ProductOption {
   id: string;
   name: string;
+  seriesId?: string | null;
+  seriesName?: string | null;
   isActive?: boolean;
 }
 
@@ -22,24 +24,25 @@ interface CupPriceConfig {
   price: number;
 }
 
-interface SeriesCupRule {
+interface ProductCupRule {
   id: string;
-  seriesId: string;
-  seriesName: string;
+  productId: string;
+  productName: string;
+  seriesName?: string | null;
   cupPrices: Record<string, CupPriceConfig>;
 }
 
-const STORAGE_KEY = 'teh_baling_cup_rules';
+const STORAGE_KEY = 'teh_baling_product_cup_rules';
 
 export default function CupsPage() {
   const [cupList, setCupList] = useState<CupTypeItem[]>([]);
-  const [seriesOptions, setSeriesOptions] = useState<SeriesOption[]>([]);
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [submittingCup, setSubmittingCup] = useState(false);
   const [togglingCupId, setTogglingCupId] = useState<string | null>(null);
 
-  // Aturan Harga & Ketersediaan Cup per Series Teh (LocalStorage / State)
-  const [rules, setRules] = useState<SeriesCupRule[]>([]);
+  // Aturan Harga & Ketersediaan Cup per Produk Teh (LocalStorage / State / Server)
+  const [rules, setRules] = useState<ProductCupRule[]>([]);
 
   // Modal State untuk Master Ukuran Cup (Tambah & Edit - Murni Nama Cup)
   const [showCupModal, setShowCupModal] = useState(false);
@@ -48,28 +51,30 @@ export default function CupsPage() {
   const [cupIsActive, setCupIsActive] = useState(true);
   const [cupError, setCupError] = useState<string | null>(null);
 
-  // Modal State untuk Aturan Harga Cup per Series Teh
+  // Modal State untuk Aturan Harga Cup per Produk Teh
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [modalCupPrices, setModalCupPrices] = useState<Record<string, CupPriceConfig>>({});
   const [ruleError, setRuleError] = useState<string | null>(null);
 
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [cupRes, seriesRes, rulesRes] = await Promise.all([
+    const [cupRes, prodRes, rulesRes] = await Promise.all([
       api.get<CupTypeItem[]>('/cup-types?all=true'),
-      api.get<SeriesOption[]>('/tea-series?all=true'),
-      api.get<SeriesCupRule[]>('/cup-rules'),
+      api.get<ProductOption[]>('/tea-products?all=true'),
+      api.get<ProductCupRule[]>('/cup-rules'),
     ]);
 
     if (cupRes.success && cupRes.data) {
       setCupList(cupRes.data);
     }
-    if (seriesRes.success && seriesRes.data) {
-      setSeriesOptions(seriesRes.data);
-      if (seriesRes.data.length > 0 && !selectedSeriesId) {
-        setSelectedSeriesId(seriesRes.data[0].id);
+    if (prodRes.success && prodRes.data) {
+      setProductOptions(prodRes.data);
+      if (prodRes.data.length > 0 && !selectedProductId) {
+        setSelectedProductId(prodRes.data[0].id);
       }
     }
     if (rulesRes.success && Array.isArray(rulesRes.data) && rulesRes.data.length > 0) {
@@ -79,13 +84,13 @@ export default function CupsPage() {
       }
     }
     setLoading(false);
-  }, [selectedSeriesId]);
+  }, [selectedProductId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Load and sync rules with LocalStorage and series
+  // Load and sync rules with LocalStorage and products
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -94,20 +99,20 @@ export default function CupsPage() {
     const savedRulesStr = localStorage.getItem(STORAGE_KEY);
     if (savedRulesStr) {
       try {
-        const parsed = JSON.parse(savedRulesStr) as SeriesCupRule[];
+        const parsed = JSON.parse(savedRulesStr) as ProductCupRule[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           setRules(parsed);
           api.post('/cup-rules', { rules: parsed }).catch(() => {});
           return;
         }
       } catch {
-        // invalid json, fallback
+        // fallback
       }
     }
 
-    if (seriesOptions.length > 0 && cupList.length > 0 && rules.length === 0) {
-      // Initialize default rules per series
-      const initialRules: SeriesCupRule[] = seriesOptions.map((s, idx) => {
+    if (productOptions.length > 0 && cupList.length > 0 && rules.length === 0) {
+      // Initialize default rules per product
+      const initialRules: ProductCupRule[] = productOptions.map((p, idx) => {
         const cupPrices: Record<string, CupPriceConfig> = {};
         cupList.forEach((c) => {
           let defaultPrice = 10000;
@@ -117,12 +122,13 @@ export default function CupsPage() {
           else if (cName.includes('big') || cName.includes('besar')) defaultPrice = 10000;
           else if (cName.includes('jumbo')) defaultPrice = 12000;
 
-          cupPrices[c.id] = { enabled: true, price: defaultPrice + idx * 2000 };
+          cupPrices[c.id] = { enabled: true, price: defaultPrice + (idx % 3) * 2000 };
         });
         return {
-          id: `rule_${s.id}`,
-          seriesId: s.id,
-          seriesName: s.name,
+          id: `rule_${p.id}`,
+          productId: p.id,
+          productName: p.name,
+          seriesName: p.seriesName,
           cupPrices,
         };
       });
@@ -130,10 +136,10 @@ export default function CupsPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialRules));
       api.post('/cup-rules', { rules: initialRules }).catch(() => {});
     }
-  }, [seriesOptions, cupList, rules.length]);
+  }, [productOptions, cupList, rules.length]);
 
   // Helper to persist rules
-  const savePersistedRules = (newRules: SeriesCupRule[]) => {
+  const savePersistedRules = (newRules: ProductCupRule[]) => {
     setRules(newRules);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newRules));
@@ -141,14 +147,13 @@ export default function CupsPage() {
     api.post('/cup-rules', { rules: newRules }).catch(() => {});
   };
 
-  // Direct Inline Matrix Price / Status Update (Dynamic)
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
-
-  const handleInlineCupPriceChange = (seriesId: string, seriesName: string, cupId: string, priceVal: number) => {
+  // Live Inline Matrix Edit (Product-based)
+  const handleInlineCupPriceChange = (productId: string, productName: string, seriesName: string | null | undefined, cupId: string, priceVal: number) => {
     setRules((prev) => {
-      const existing = prev.find((r) => r.seriesId === seriesId) || {
-        id: `rule_${seriesId}`,
-        seriesId,
+      const existing = prev.find((r) => r.productId === productId) || {
+        id: `rule_${productId}`,
+        productId,
+        productName,
         seriesName,
         cupPrices: {},
       };
@@ -159,9 +164,9 @@ export default function CupsPage() {
         price: isNaN(priceVal) ? 0 : priceVal,
       };
 
-      const updatedRules = prev.some((r) => r.seriesId === seriesId)
-        ? prev.map((r) => (r.seriesId === seriesId ? { ...r, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
-        : [...prev, { ...existing, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
+      const updatedRules = prev.some((r) => r.productId === productId)
+        ? prev.map((r) => (r.productId === productId ? { ...r, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
+        : [...prev, { ...existing, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
@@ -174,11 +179,12 @@ export default function CupsPage() {
     setTimeout(() => setSaveStatus(null), 2000);
   };
 
-  const handleInlineCupToggle = (seriesId: string, seriesName: string, cupId: string, enabled: boolean) => {
+  const handleInlineCupToggle = (productId: string, productName: string, seriesName: string | null | undefined, cupId: string, enabled: boolean) => {
     setRules((prev) => {
-      const existing = prev.find((r) => r.seriesId === seriesId) || {
-        id: `rule_${seriesId}`,
-        seriesId,
+      const existing = prev.find((r) => r.productId === productId) || {
+        id: `rule_${productId}`,
+        productId,
+        productName,
         seriesName,
         cupPrices: {},
       };
@@ -189,9 +195,9 @@ export default function CupsPage() {
         enabled,
       };
 
-      const updatedRules = prev.some((r) => r.seriesId === seriesId)
-        ? prev.map((r) => (r.seriesId === seriesId ? { ...r, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
-        : [...prev, { ...existing, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
+      const updatedRules = prev.some((r) => r.productId === productId)
+        ? prev.map((r) => (r.productId === productId ? { ...r, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
+        : [...prev, { ...existing, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
@@ -320,15 +326,15 @@ export default function CupsPage() {
   };
 
   const activeCups = cupList.filter((c) => c.isActive !== false);
-  const activeSeriesOptions = seriesOptions.filter((s) => s.isActive !== false);
+  const activeProducts = productOptions.filter((p) => p.isActive !== false);
 
   // ---------------------------------------------------------------------------
-  // Handlers untuk Rule Harga per Series Modal
+  // Handlers untuk Rule Harga per Produk Modal
   // ---------------------------------------------------------------------------
   const handleOpenAddRule = () => {
-    const availableSeries = activeSeriesOptions.length > 0 ? activeSeriesOptions : seriesOptions;
-    if (availableSeries.length === 0) {
-      alert('Belum ada series teh. Tambahkan series terlebih dahulu.');
+    const availableProducts = activeProducts.length > 0 ? activeProducts : productOptions;
+    if (availableProducts.length === 0) {
+      alert('Belum ada produk teh. Tambahkan produk teh terlebih dahulu di menu Produk Teh.');
       return;
     }
     if (activeCups.length === 0) {
@@ -336,7 +342,7 @@ export default function CupsPage() {
       return;
     }
     setEditingRuleId(null);
-    setSelectedSeriesId(availableSeries[0].id);
+    setSelectedProductId(availableProducts[0].id);
 
     const initialConfig: Record<string, CupPriceConfig> = {};
     activeCups.forEach((c) => {
@@ -354,9 +360,9 @@ export default function CupsPage() {
     setShowRuleModal(true);
   };
 
-  const handleOpenEditRule = (rule: SeriesCupRule) => {
+  const handleOpenEditRule = (rule: ProductCupRule) => {
     setEditingRuleId(rule.id);
-    setSelectedSeriesId(rule.seriesId);
+    setSelectedProductId(rule.productId);
 
     const updatedConfig: Record<string, CupPriceConfig> = {};
     activeCups.forEach((c) => {
@@ -401,37 +407,39 @@ export default function CupsPage() {
 
   const handleSaveRule = (e: React.FormEvent) => {
     e.preventDefault();
-    const seriesObj = seriesOptions.find((s) => s.id === selectedSeriesId);
-    if (!seriesObj) {
-      setRuleError('Series teh wajib dipilih dari dropdown');
+    const prodObj = productOptions.find((p) => p.id === selectedProductId);
+    if (!prodObj) {
+      setRuleError('Produk teh wajib dipilih dari dropdown');
       return;
     }
 
     const hasEnabled = Object.values(modalCupPrices).some((cp) => cp.enabled);
     if (!hasEnabled) {
-      setRuleError('Pilih minimal 1 ukuran cup yang aktif untuk series ini');
+      setRuleError('Pilih minimal 1 ukuran cup yang aktif untuk produk ini');
       return;
     }
 
-    let updated: SeriesCupRule[];
+    let updated: ProductCupRule[];
     if (editingRuleId) {
       updated = rules.map((r) =>
         r.id === editingRuleId
           ? {
               ...r,
-              seriesId: selectedSeriesId,
-              seriesName: seriesObj.name,
+              productId: selectedProductId,
+              productName: prodObj.name,
+              seriesName: prodObj.seriesName,
               cupPrices: modalCupPrices,
             }
           : r
       );
     } else {
       updated = [
-        ...rules.filter((r) => r.seriesId !== selectedSeriesId),
+        ...rules.filter((r) => r.productId !== selectedProductId),
         {
           id: `r_${Date.now()}`,
-          seriesId: selectedSeriesId,
-          seriesName: seriesObj.name,
+          productId: selectedProductId,
+          productName: prodObj.name,
+          seriesName: prodObj.seriesName,
           cupPrices: modalCupPrices,
         },
       ];
@@ -444,7 +452,7 @@ export default function CupsPage() {
   };
 
   const handleDeleteRule = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus aturan harga series ini?')) {
+    if (confirm('Apakah Anda yakin ingin menghapus aturan ukuran cup produk ini?')) {
       const updated = rules.filter((r) => r.id !== id);
       savePersistedRules(updated);
     }
@@ -455,9 +463,9 @@ export default function CupsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Manajemen Ukuran Cup & Penetapan Harga</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Manajemen Ukuran Cup & Mapping Produk Teh</h1>
           <p className="text-sm text-slate-500">
-            Kelola master ukuran cup dan tentukan harga dinamis per kategori series teh
+            Kelola master ukuran cup dan tentukan ketersediaan cup serta harga jual dinamis langsung per Produk Teh
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -507,7 +515,7 @@ export default function CupsPage() {
                 required
               />
               <p className="mt-1 text-[11px] text-slate-500">
-                Harga jual untuk cup ini diatur secara fleksibel pada tabel Matriks Harga per Series di bawah.
+                Ketersediaan & harga jual untuk cup ini diatur secara fleksibel pada tabel Matriks Mapping Produk di bawah.
               </p>
             </div>
 
@@ -550,13 +558,13 @@ export default function CupsPage() {
         </div>
       )}
 
-      {/* Modal Edit / Tambah Aturan Harga & Ukuran Cup per Series */}
+      {/* Modal Edit / Tambah Aturan Harga & Ukuran Cup per Produk */}
       {showRuleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <form onSubmit={handleSaveRule} className="w-full max-w-lg space-y-5 rounded-xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h2 className="text-lg font-bold text-slate-900">
-                {editingRuleId ? 'Edit Aturan Harga & Ukuran Cup' : 'Tambah Aturan Series Baru'}
+                {editingRuleId ? 'Edit Mapping Cup Produk' : 'Tambah Mapping Produk Baru'}
               </h2>
               <button type="button" onClick={() => setShowRuleModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
@@ -566,15 +574,15 @@ export default function CupsPage() {
             {ruleError && <p className="text-sm text-red-600 font-medium">{ruleError}</p>}
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700">Pilih Series Teh (Kategori)</label>
+              <label className="block text-sm font-semibold text-slate-700">Pilih Produk Minuman Teh</label>
               <select
-                value={selectedSeriesId}
-                onChange={(e) => setSelectedSeriesId(e.target.value)}
+                value={selectedProductId}
+                onChange={(e) => setSelectedProductId(e.target.value)}
                 className="mt-1.5 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 focus:border-emerald-500 focus:outline-none"
               >
-                {seriesOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} {s.isActive === false ? '(Non-Aktif)' : ''}
+                {productOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.seriesName ? `(${p.seriesName})` : ''} {p.isActive === false ? '(Non-Aktif)' : ''}
                   </option>
                 ))}
               </select>
@@ -582,7 +590,7 @@ export default function CupsPage() {
 
             <div className="space-y-3">
               <label className="block text-sm font-semibold text-slate-700">
-                Ketersediaan Cup & Harga Jual per Series (IDR):
+                Pilihan Ukuran Cup & Harga Jual Produk Ini (IDR):
               </label>
 
               <div className="space-y-3 max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50/50">
@@ -641,7 +649,7 @@ export default function CupsPage() {
                 type="submit"
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
               >
-                {editingRuleId ? 'Update Aturan Harga' : 'Simpan Aturan Harga'}
+                {editingRuleId ? 'Update Mapping Produk' : 'Simpan Mapping Produk'}
               </button>
             </div>
           </form>
@@ -727,14 +735,14 @@ export default function CupsPage() {
         )}
       </div>
 
-      {/* SECTION 2: Matriks Harga Cup Spesifik per Series Teh (Fully Dynamic & Inline) */}
+      {/* SECTION 2: Matriks Harga & Ukuran Cup Dinamis Berdasarkan Produk Teh */}
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
               <Settings className="h-5 w-5 text-emerald-700" />
               <h2 className="text-lg font-bold text-slate-900">
-                Matriks Harga Cup Dinamis per Series Teh (Live Matrix Editor)
+                Matriks Ukuran Cup & Harga Dinamis per Produk Teh (Product-Cup Matrix)
               </h2>
               {saveStatus && (
                 <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 animate-pulse">
@@ -743,7 +751,7 @@ export default function CupsPage() {
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Edit harga jual dan ketersediaan cup langsung di tabel matriks di bawah ini. Semua perubahan tersinkronisasi otomatis.
+              Atur pilihan ukuran cup yang tersedia dan harga jual spesifik langsung per produk minuman teh. Perubahan tersinkronisasi otomatis ke closing shift.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -757,16 +765,16 @@ export default function CupsPage() {
           </div>
         </div>
 
-        {/* Tabel Matriks Harga Dinamis */}
+        {/* Tabel Matriks Harga per Produk */}
         <p className="text-[11px] text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 sm:hidden flex items-center gap-1.5 font-medium mb-2">
           👉 <span>Geser tabel ke samping untuk melihat seluruh ukuran cup aktif</span>
         </p>
         <div className="overflow-x-auto w-full max-w-full block rounded-lg border border-slate-200">
-          <table className="w-full min-w-[700px] text-left text-sm text-slate-600">
+          <table className="w-full min-w-[750px] text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-6 py-3 font-bold text-slate-800 whitespace-nowrap min-w-[200px]">
-                  Kategori / Series Teh
+                <th className="px-6 py-3 font-bold text-slate-800 whitespace-nowrap min-w-[220px]">
+                  Produk Minuman Teh
                 </th>
                 {activeCups.length === 0 ? (
                   <th className="px-4 py-3 text-center text-slate-400 italic">
@@ -788,28 +796,31 @@ export default function CupsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {activeSeriesOptions.length === 0 ? (
+              {activeProducts.length === 0 ? (
                 <tr>
                   <td colSpan={activeCups.length + 2} className="px-6 py-8 text-center text-slate-500">
-                    Belum ada series teh yang aktif. Silakan tambahkan atau aktifkan series di menu Series Teh.
+                    Belum ada produk teh yang aktif. Silakan tambahkan atau aktifkan produk di menu Katalog Produk Teh.
                   </td>
                 </tr>
               ) : (
-                activeSeriesOptions.map((series) => {
-                  const rule = rules.find((r) => r.seriesId === series.id);
-                  const effectiveRule: SeriesCupRule = rule || {
-                    id: `rule_${series.id}`,
-                    seriesId: series.id,
-                    seriesName: series.name,
+                activeProducts.map((product) => {
+                  const rule = rules.find((r) => r.productId === product.id);
+                  const effectiveRule: ProductCupRule = rule || {
+                    id: `rule_${product.id}`,
+                    productId: product.id,
+                    productName: product.name,
+                    seriesName: product.seriesName,
                     cupPrices: {},
                   };
 
                   return (
-                    <tr key={series.id} className="hover:bg-slate-50/70 transition">
+                    <tr key={product.id} className="hover:bg-slate-50/70 transition">
                       <td className="px-6 py-4 font-bold text-slate-900 align-middle">
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-slate-900">{series.name}</span>
-                          <span className="text-[11px] font-semibold text-emerald-700">Series Aktif</span>
+                          <span className="text-sm font-bold text-slate-900">{product.name}</span>
+                          <span className="text-[11px] font-semibold text-emerald-700">
+                            {product.seriesName ? `${product.seriesName}` : 'Produk Aktif'}
+                          </span>
                         </div>
                       </td>
 
@@ -831,7 +842,7 @@ export default function CupsPage() {
                                   <input
                                     type="checkbox"
                                     checked={isEnabled}
-                                    onChange={(e) => handleInlineCupToggle(series.id, series.name, cup.id, e.target.checked)}
+                                    onChange={(e) => handleInlineCupToggle(product.id, product.name, product.seriesName, cup.id, e.target.checked)}
                                     className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                   />
                                   <span className="text-[11px]">{isEnabled ? 'Tersedia' : 'Nonaktif'}</span>
@@ -848,8 +859,9 @@ export default function CupsPage() {
                                     value={config.price || ''}
                                     onChange={(e) =>
                                       handleInlineCupPriceChange(
-                                        series.id,
-                                        series.name,
+                                        product.id,
+                                        product.name,
+                                        product.seriesName,
                                         cup.id,
                                         parseInt(e.target.value, 10)
                                       )
