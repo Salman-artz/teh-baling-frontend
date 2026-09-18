@@ -68,53 +68,37 @@ export default function CupsPage() {
       api.get<ProductCupRule[]>('/cup-rules'),
     ]);
 
-    if (cupRes.success && cupRes.data) {
-      setCupList(cupRes.data);
+    const cups = cupRes.success && cupRes.data ? cupRes.data : [];
+    const prods = prodRes.success && prodRes.data ? prodRes.data : [];
+
+    setCupList(cups);
+    setProductOptions(prods);
+    if (prods.length > 0 && !selectedProductId) {
+      setSelectedProductId(prods[0].id);
     }
-    if (prodRes.success && prodRes.data) {
-      setProductOptions(prodRes.data);
-      if (prodRes.data.length > 0 && !selectedProductId) {
-        setSelectedProductId(prodRes.data[0].id);
-      }
-    }
+
+    let loadedRules: ProductCupRule[] = [];
     if (rulesRes.success && Array.isArray(rulesRes.data) && rulesRes.data.length > 0) {
-      setRules(rulesRes.data);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rulesRes.data));
-      }
-    }
-    setLoading(false);
-  }, [selectedProductId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Load and sync rules with LocalStorage and products
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    if (rules.length > 0) return;
-
-    const savedRulesStr = localStorage.getItem(STORAGE_KEY);
-    if (savedRulesStr) {
-      try {
-        const parsed = JSON.parse(savedRulesStr) as ProductCupRule[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setRules(parsed);
-          api.post('/cup-rules', { rules: parsed }).catch(() => {});
-          return;
+      loadedRules = rulesRes.data;
+    } else if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            loadedRules = parsed;
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // fallback
       }
     }
 
-    if (productOptions.length > 0 && cupList.length > 0 && rules.length === 0) {
-      // Initialize default rules per product
-      const initialRules: ProductCupRule[] = productOptions.map((p, idx) => {
+    // Jika benar-benar belum ada rule sama sekali di DB dan LocalStorage, generate default awal
+    if (loadedRules.length === 0 && prods.length > 0 && cups.length > 0) {
+      loadedRules = prods.map((p, idx) => {
         const cupPrices: Record<string, CupPriceConfig> = {};
-        cupList.forEach((c) => {
+        cups.forEach((c) => {
           let defaultPrice = 10000;
           const cName = c.name.toLowerCase();
           if (cName.includes('kecil') || cName.includes('reguler')) defaultPrice = 5000;
@@ -132,11 +116,20 @@ export default function CupsPage() {
           cupPrices,
         };
       });
-      setRules(initialRules);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialRules));
-      api.post('/cup-rules', { rules: initialRules }).catch(() => {});
+      api.post('/cup-rules', { rules: loadedRules }).catch(() => {});
     }
-  }, [productOptions, cupList, rules.length]);
+
+    setRules(loadedRules);
+    if (typeof window !== 'undefined' && loadedRules.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(loadedRules));
+    }
+
+    setLoading(false);
+  }, [selectedProductId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Helper to persist rules
   const savePersistedRules = (newRules: ProductCupRule[]) => {
@@ -168,10 +161,7 @@ export default function CupsPage() {
         ? prev.map((r) => (r.productId === productId ? { ...r, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
         : [...prev, { ...existing, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
-      }
-      api.post('/cup-rules', { rules: updatedRules }).catch(() => {});
+      savePersistedRules(updatedRules);
       return updatedRules;
     });
 
@@ -189,7 +179,7 @@ export default function CupsPage() {
         cupPrices: {},
       };
 
-      const prevConfig = existing.cupPrices[cupId] || { enabled: false, price: 10000 };
+      const prevConfig = existing.cupPrices[cupId] || { enabled: !enabled, price: 10000 };
       const updatedConfig = {
         ...prevConfig,
         enabled,
@@ -199,10 +189,7 @@ export default function CupsPage() {
         ? prev.map((r) => (r.productId === productId ? { ...r, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
         : [...prev, { ...existing, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
-      }
-      api.post('/cup-rules', { rules: updatedRules }).catch(() => {});
+      savePersistedRules(updatedRules);
       return updatedRules;
     });
 
