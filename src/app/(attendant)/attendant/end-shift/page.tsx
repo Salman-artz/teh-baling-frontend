@@ -163,32 +163,49 @@ export default function EndShiftPage() {
           : defaultProducts;
         setProducts(rawProducts);
 
-        // Buat daftar kombinasi produk x ukuran cup dengan harga masing-masing
+        // Muat aturan mapping cup & harga per series dari konfigurasi Admin
+        let storedRules: { seriesId: string; seriesName: string; cupPrices: Record<string, { enabled: boolean; price: number }> }[] = [];
+        if (typeof window !== 'undefined') {
+          const rulesStr = localStorage.getItem('teh_baling_cup_rules');
+          if (rulesStr) {
+            try {
+              storedRules = JSON.parse(rulesStr);
+            } catch {
+              storedRules = [];
+            }
+          }
+        }
+
+        // Buat daftar kombinasi produk x ukuran cup dengan harga dari mapping admin
         const saleItemsList: ProductCupSaleItem[] = [];
         rawProducts.forEach((p) => {
-          // Jika produk spesial (seperti Yakult/Lychee), sediakan cup Big & Jumbo (atau jika produk biasa, sediakan semua cup)
-          const isSpecialTea = p.name.toLowerCase().includes('yakult') || p.name.toLowerCase().includes('lychee') || p.name.toLowerCase().includes('fruity');
-          const availableCups = isSpecialTea
-            ? rawCups.filter((c) => c.name.toLowerCase().includes('big') || c.name.toLowerCase().includes('jumbo') || c.name.toLowerCase().includes('medium'))
-            : rawCups;
+          // Cari aturan mapping yang cocok untuk produk/series ini
+          const matchedRule = storedRules.find(
+            (r) =>
+              (p.seriesId && r.seriesId === p.seriesId) ||
+              (p.seriesName && r.seriesName?.toLowerCase() === p.seriesName?.toLowerCase()) ||
+              (p.name && r.seriesName && p.name.toLowerCase().includes(r.seriesName.toLowerCase().replace(' series', '')))
+          );
 
-          availableCups.forEach((cup) => {
-            // Kalkulasi harga: harga dasar cup
-            let price = cup.price || 5000;
-            // Penyesuaian harga jika series yakult/buah (+Rp 2.000)
-            if (isSpecialTea && price <= 10000) {
-              price += 2000;
+          rawCups.forEach((cup) => {
+            const cupConfig = matchedRule?.cupPrices?.[cup.id];
+            
+            // Cek apakah ukuran cup ini diaktifkan di admin (default true jika belum diatur)
+            const isEnabled = cupConfig !== undefined ? cupConfig.enabled : true;
+
+            if (isEnabled) {
+              const price = cupConfig?.price !== undefined ? cupConfig.price : (cup.price || 10000);
+
+              saleItemsList.push({
+                id: `${p.id}-${cup.id}`,
+                productId: p.id,
+                productName: p.name,
+                cupTypeId: cup.id,
+                cupTypeName: cup.name,
+                price,
+                qtySold: 0,
+              });
             }
-
-            saleItemsList.push({
-              id: `${p.id}-${cup.id}`,
-              productId: p.id,
-              productName: p.name,
-              cupTypeId: cup.id,
-              cupTypeName: cup.name,
-              price,
-              qtySold: 0,
-            });
           });
         });
         setSalesItems(saleItemsList);
