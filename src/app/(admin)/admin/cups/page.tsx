@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { formatRupiah } from '@/lib/utils';
-import { Pencil, Trash2, Settings, Plus, Check, X, RefreshCw, AlertCircle, Package } from 'lucide-react';
+import { Pencil, Trash2, Settings, Plus, X, RefreshCw, AlertCircle, Package } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
 interface CupTypeItem {
@@ -130,6 +129,67 @@ export default function CupsPage() {
     }
   };
 
+  // Direct Inline Matrix Price / Status Update (Dynamic)
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
+  const handleInlineCupPriceChange = (seriesId: string, seriesName: string, cupId: string, priceVal: number) => {
+    setRules((prev) => {
+      const existing = prev.find((r) => r.seriesId === seriesId) || {
+        id: `rule_${seriesId}`,
+        seriesId,
+        seriesName,
+        cupPrices: {},
+      };
+
+      const prevConfig = existing.cupPrices[cupId] || { enabled: true, price: 10000 };
+      const updatedConfig = {
+        ...prevConfig,
+        price: isNaN(priceVal) ? 0 : priceVal,
+      };
+
+      const updatedRules = prev.some((r) => r.seriesId === seriesId)
+        ? prev.map((r) => (r.seriesId === seriesId ? { ...r, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
+        : [...prev, { ...existing, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
+      }
+      return updatedRules;
+    });
+
+    setSaveStatus('✓ Perubahan harga tersimpan');
+    setTimeout(() => setSaveStatus(null), 2000);
+  };
+
+  const handleInlineCupToggle = (seriesId: string, seriesName: string, cupId: string, enabled: boolean) => {
+    setRules((prev) => {
+      const existing = prev.find((r) => r.seriesId === seriesId) || {
+        id: `rule_${seriesId}`,
+        seriesId,
+        seriesName,
+        cupPrices: {},
+      };
+
+      const prevConfig = existing.cupPrices[cupId] || { enabled: false, price: 10000 };
+      const updatedConfig = {
+        ...prevConfig,
+        enabled,
+      };
+
+      const updatedRules = prev.some((r) => r.seriesId === seriesId)
+        ? prev.map((r) => (r.seriesId === seriesId ? { ...r, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
+        : [...prev, { ...existing, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
+      }
+      return updatedRules;
+    });
+
+    setSaveStatus('✓ Status cup tersimpan');
+    setTimeout(() => setSaveStatus(null), 2000);
+  };
+
   // ---------------------------------------------------------------------------
   // Handlers untuk Master Ukuran Cup (Murni Nama Cup Tanpa Harga)
   // ---------------------------------------------------------------------------
@@ -245,19 +305,27 @@ export default function CupsPage() {
     }
   };
 
+  const activeCups = cupList.filter((c) => c.isActive !== false);
+  const activeSeriesOptions = seriesOptions.filter((s) => s.isActive !== false);
+
   // ---------------------------------------------------------------------------
-  // Handlers untuk Rule Harga per Series
+  // Handlers untuk Rule Harga per Series Modal
   // ---------------------------------------------------------------------------
   const handleOpenAddRule = () => {
-    if (seriesOptions.length === 0) {
+    const availableSeries = activeSeriesOptions.length > 0 ? activeSeriesOptions : seriesOptions;
+    if (availableSeries.length === 0) {
       alert('Belum ada series teh. Tambahkan series terlebih dahulu.');
       return;
     }
+    if (activeCups.length === 0) {
+      alert('Belum ada ukuran cup yang aktif. Aktifkan minimal 1 ukuran cup terlebih dahulu.');
+      return;
+    }
     setEditingRuleId(null);
-    setSelectedSeriesId(seriesOptions[0].id);
+    setSelectedSeriesId(availableSeries[0].id);
 
     const initialConfig: Record<string, CupPriceConfig> = {};
-    cupList.forEach((c) => {
+    activeCups.forEach((c) => {
       let defaultP = 10000;
       const cName = c.name.toLowerCase();
       if (cName.includes('kecil') || cName.includes('reguler')) defaultP = 5000;
@@ -277,7 +345,7 @@ export default function CupsPage() {
     setSelectedSeriesId(rule.seriesId);
 
     const updatedConfig: Record<string, CupPriceConfig> = {};
-    cupList.forEach((c) => {
+    activeCups.forEach((c) => {
       if (rule.cupPrices[c.id]) {
         updatedConfig[c.id] = { ...rule.cupPrices[c.id] };
       } else {
@@ -375,7 +443,7 @@ export default function CupsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Manajemen Ukuran Cup & Penetapan Harga</h1>
           <p className="text-sm text-slate-500">
-            Kelola master ukuran cup dan tentukan harga spesifik per kategori series teh
+            Kelola master ukuran cup dan tentukan harga dinamis per kategori series teh
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -504,10 +572,10 @@ export default function CupsPage() {
               </label>
 
               <div className="space-y-3 max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50/50">
-                {cupList.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-4">Belum ada master ukuran cup.</p>
+                {activeCups.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-4">Belum ada ukuran cup yang aktif.</p>
                 ) : (
-                  cupList.map((cup) => {
+                  activeCups.map((cup) => {
                     const config = modalCupPrices[cup.id] || { enabled: false, price: 10000 };
                     return (
                       <div
@@ -523,7 +591,7 @@ export default function CupsPage() {
                             onChange={(e) => handleToggleCupPrice(cup.id, e.target.checked)}
                             className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
-                          <span>{cup.name} {cup.isActive === false ? '(Non-Aktif)' : ''}</span>
+                          <span>{cup.name}</span>
                         </label>
 
                         {config.enabled ? (
@@ -574,7 +642,7 @@ export default function CupsPage() {
             <h2 className="text-lg font-bold text-slate-900">Varian Master Ukuran Cup</h2>
           </div>
           <span className="text-xs font-semibold text-slate-500">
-            {cupList.length} Ukuran Terdaftar
+            {cupList.length} Ukuran Terdaftar ({activeCups.length} Aktif)
           </span>
         </div>
 
@@ -631,7 +699,7 @@ export default function CupsPage() {
                     </button>
                     <button
                       onClick={() => handleDeleteCup(cup.id)}
-                      className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 transition"
+                      className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 transition"
                       title="Hapus Ukuran Cup"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -645,98 +713,171 @@ export default function CupsPage() {
         )}
       </div>
 
-      {/* SECTION 2: Matriks Harga Cup Spesifik per Series Teh */}
+      {/* SECTION 2: Matriks Harga Cup Spesifik per Series Teh (Fully Dynamic & Inline) */}
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Settings className="h-5 w-5 text-emerald-700" />
-              Matriks Harga Cup per Series Teh (Dynamic Series Pricing)
-            </h2>
-            <p className="text-xs text-slate-500">
-              Harga jual dan ketersediaan cup ditentukan secara spesifik untuk setiap kategori series teh
+              <h2 className="text-lg font-bold text-slate-900">
+                Matriks Harga Cup Dinamis per Series Teh (Live Matrix Editor)
+              </h2>
+              {saveStatus && (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 animate-pulse">
+                  {saveStatus}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Edit harga jual dan ketersediaan cup langsung di tabel matriks di bawah ini. Semua perubahan tersinkronisasi otomatis.
             </p>
           </div>
-          <button
-            onClick={handleOpenAddRule}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-800 transition shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            + Atur Harga Series
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenAddRule}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Atur via Modal
+            </button>
+          </div>
         </div>
 
-        {/* Tabel Matriks Harga */}
+        {/* Tabel Matriks Harga Dinamis */}
         <p className="text-[11px] text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 sm:hidden flex items-center gap-1.5 font-medium mb-2">
-          👉 <span>Geser tabel ke samping untuk melihat seluruh ukuran cup</span>
+          👉 <span>Geser tabel ke samping untuk melihat seluruh ukuran cup aktif</span>
         </p>
         <div className="overflow-x-auto w-full max-w-full block rounded-lg border border-slate-200">
-          <table className="w-full min-w-[650px] text-left text-sm text-slate-600">
+          <table className="w-full min-w-[700px] text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-6 py-3 font-semibold text-slate-700 whitespace-nowrap">Kategori / Series Teh</th>
-                {cupList.map((cup) => (
-                  <th key={cup.id} className="px-4 py-3 text-center font-semibold text-slate-700 whitespace-nowrap">
-                    {cup.name}
+                <th className="px-6 py-3 font-bold text-slate-800 whitespace-nowrap min-w-[200px]">
+                  Kategori / Series Teh
+                </th>
+                {activeCups.length === 0 ? (
+                  <th className="px-4 py-3 text-center text-slate-400 italic">
+                    Belum ada ukuran cup aktif
                   </th>
-                ))}
-                <th className="px-6 py-3 text-right whitespace-nowrap">Aksi</th>
+                ) : (
+                  activeCups.map((cup) => (
+                    <th key={cup.id} className="px-4 py-3 text-center font-bold text-slate-800 whitespace-nowrap min-w-[160px]">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span>{cup.name}</span>
+                        <span className="text-[10px] font-normal text-slate-400 capitalize">Ukuran Aktif</span>
+                      </div>
+                    </th>
+                  ))
+                )}
+                <th className="px-6 py-3 text-right font-bold text-slate-800 whitespace-nowrap">
+                  Aksi
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {rules.length === 0 ? (
+              {activeSeriesOptions.length === 0 ? (
                 <tr>
-                  <td colSpan={cupList.length + 2} className="px-6 py-8 text-center text-slate-500">
-                    Belum ada aturan harga series yang dikonfigurasi.
+                  <td colSpan={activeCups.length + 2} className="px-6 py-8 text-center text-slate-500">
+                    Belum ada series teh yang aktif. Silakan tambahkan atau aktifkan series di menu Series Teh.
                   </td>
                 </tr>
               ) : (
-                rules.map((rule) => (
-                  <tr key={rule.id} className="hover:bg-slate-50/80">
-                    <td className="px-6 py-4 font-bold text-slate-900">
-                      {rule.seriesName}
-                    </td>
-                    {cupList.map((cup) => {
-                      const config = rule.cupPrices[cup.id];
-                      return (
-                        <td key={cup.id} className="px-4 py-4 text-center">
-                          {config && config.enabled ? (
-                            <div className="inline-flex flex-col items-center">
-                              <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200 shadow-2xs">
-                                {formatRupiah(config.price)}
-                              </span>
-                              <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-0.5 mt-0.5">
-                                <Check className="h-3 w-3" /> Tersedia
-                              </span>
+                activeSeriesOptions.map((series) => {
+                  const rule = rules.find((r) => r.seriesId === series.id);
+                  const effectiveRule: SeriesCupRule = rule || {
+                    id: `rule_${series.id}`,
+                    seriesId: series.id,
+                    seriesName: series.name,
+                    cupPrices: {},
+                  };
+
+                  return (
+                    <tr key={series.id} className="hover:bg-slate-50/70 transition">
+                      <td className="px-6 py-4 font-bold text-slate-900 align-middle">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-900">{series.name}</span>
+                          <span className="text-[11px] font-semibold text-emerald-700">Series Aktif</span>
+                        </div>
+                      </td>
+
+                      {activeCups.map((cup) => {
+                        const config = effectiveRule.cupPrices[cup.id] ?? {
+                          enabled: true,
+                          price: 10000,
+                        };
+                        const isEnabled = config.enabled !== false;
+
+                        return (
+                          <td key={cup.id} className="px-3 py-3 text-center align-middle">
+                            <div className={`p-2.5 rounded-lg border transition ${
+                              isEnabled ? 'bg-white border-emerald-200 shadow-xs' : 'bg-slate-50 border-slate-200 opacity-60'
+                            }`}>
+                              {/* Toggle Checkbox */}
+                              <div className="flex items-center justify-between gap-1 mb-2">
+                                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={isEnabled}
+                                    onChange={(e) => handleInlineCupToggle(series.id, series.name, cup.id, e.target.checked)}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span className="text-[11px]">{isEnabled ? 'Tersedia' : 'Nonaktif'}</span>
+                                </label>
+                              </div>
+
+                              {/* Numeric Price Input */}
+                              {isEnabled ? (
+                                <div className="relative flex items-center">
+                                  <span className="absolute left-2 text-xs font-bold text-emerald-700 select-none">Rp</span>
+                                  <input
+                                    type="number"
+                                    step={500}
+                                    value={config.price || ''}
+                                    onChange={(e) =>
+                                      handleInlineCupPriceChange(
+                                        series.id,
+                                        series.name,
+                                        cup.id,
+                                        parseInt(e.target.value, 10)
+                                      )
+                                    }
+                                    className="w-full rounded-md border border-slate-300 pl-8 pr-2 py-1 text-xs font-bold text-emerald-800 text-right focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                                    placeholder="10000"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="text-[11px] text-slate-400 italic py-1 text-center">
+                                  Tidak Dijual
+                                </div>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs font-medium text-slate-400 italic">
-                              - Nonaktif
-                            </span>
+                          </td>
+                        );
+                      })}
+
+                      <td className="px-6 py-4 text-right align-middle whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditRule(effectiveRule)}
+                            className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                            title="Atur via Modal"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                            Modal
+                          </button>
+                          {rule && (
+                            <button
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                              title="Reset Aturan Harga"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            </button>
                           )}
-                        </td>
-                      );
-                    })}
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEditRule(rule)}
-                          className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                          Edit Harga
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRule(rule.id)}
-                          className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                          Hapus
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
