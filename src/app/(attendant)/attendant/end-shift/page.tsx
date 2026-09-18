@@ -7,7 +7,7 @@ import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, Package } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -29,6 +29,31 @@ interface AssignmentData {
 interface ProductItem {
   id: string;
   name: string;
+}
+
+interface CupTypeItem {
+  id: string;
+  name: string;
+  price?: number;
+}
+
+interface CupStockClosing {
+  cupTypeId: string;
+  cupTypeName: string;
+  qtyInitial: number;
+  qtyFinal: string;
+}
+
+interface TodayReportData {
+  id: string;
+  boothId: string;
+  boothName?: string;
+  reportDate: string;
+  shiftType: string;
+  cashModal: number;
+  cashFinal?: number | null;
+  status: string;
+  stockItems?: { cupTypeId: string; qtyInitial: number; qtySold?: number }[];
 }
 
 interface SalesItem {
@@ -58,8 +83,9 @@ export default function EndShiftPage() {
 
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
   const [salesItems, setSalesItems] = useState<SalesItem[]>([]);
-  const [cashModal] = useState(50000);
-  const [cashFinal, setCashFinal] = useState('0');
+  const [cupStocks, setCupStocks] = useState<CupStockClosing[]>([]);
+  const [cashModal, setCashModal] = useState<number>(50000);
+  const [cashFinal, setCashFinal] = useState('50000');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +97,11 @@ export default function EndShiftPage() {
       const todayStr = getWibDateString();
 
       try {
-        const [assignRes, prodRes] = await Promise.all([
+        const [assignRes, prodRes, cupRes, reportRes] = await Promise.all([
           api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`),
           api.get<ProductItem[]>('/tea-products'),
+          api.get<CupTypeItem[]>('/cup-types'),
+          api.get<TodayReportData>(`/daily-reports/today?date=${todayStr}`),
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
@@ -88,16 +116,61 @@ export default function EndShiftPage() {
           setAssignment(myAssignment || null);
         }
 
-        if (prodRes.success && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
-          const items: SalesItem[] = prodRes.data.map((p, idx) => ({
-            id: p.id,
-            productId: p.id,
-            productName: p.name,
-            price: 10000 + (idx % 3) * 2000,
-            qtySold: 0,
-          }));
-          setSalesItems(items);
+        const initialStockMap: Record<string, number> = {};
+        let modalFromReport = 50000;
+
+        if (reportRes.success && reportRes.data) {
+          if (reportRes.data.cashModal !== undefined && reportRes.data.cashModal !== null) {
+            modalFromReport = reportRes.data.cashModal;
+            setCashModal(modalFromReport);
+          }
+          if (Array.isArray(reportRes.data.stockItems)) {
+            reportRes.data.stockItems.forEach((s) => {
+              initialStockMap[s.cupTypeId] = s.qtyInitial;
+            });
+          }
         }
+
+        const defaultCupTypes: CupTypeItem[] = [
+          { id: 'c1111111-1111-1111-1111-111111111111', name: 'Cup Kecil (Reguler)' },
+          { id: 'c2222222-2222-2222-2222-222222222222', name: 'Cup Medium (Sedang)' },
+          { id: 'c3333333-3333-3333-3333-333333333333', name: 'Cup Big (Besar)' },
+          { id: 'c4444444-4444-4444-4444-444444444444', name: 'Cup Jumbo (1 Liter)' },
+        ];
+        const rawCups = cupRes.success && Array.isArray(cupRes.data) && cupRes.data.length > 0
+          ? cupRes.data
+          : defaultCupTypes;
+
+        const closings: CupStockClosing[] = rawCups.map((c) => {
+          const initial = initialStockMap[c.id] !== undefined ? initialStockMap[c.id] : 50;
+          return {
+            cupTypeId: c.id,
+            cupTypeName: c.name,
+            qtyInitial: initial,
+            qtyFinal: String(initial),
+          };
+        });
+        setCupStocks(closings);
+
+        const defaultProducts: ProductItem[] = [
+          { id: '11111111-1111-1111-1111-111111111101', name: 'Teh Baling Melati Original' },
+          { id: '11111111-1111-1111-1111-111111111102', name: 'Teh Kampul Lemon Segar' },
+          { id: '11111111-1111-1111-1111-111111111103', name: 'Teh Baling Yakult Segar' },
+          { id: '11111111-1111-1111-1111-111111111104', name: 'Teh Baling Lychee Fruity' },
+        ];
+        const rawProducts = prodRes.success && Array.isArray(prodRes.data) && prodRes.data.length > 0
+          ? prodRes.data
+          : defaultProducts;
+
+        const items: SalesItem[] = rawProducts.map((p, idx) => ({
+          id: p.id,
+          productId: p.id,
+          productName: p.name,
+          price: 5000 + (idx % 3) * 3000,
+          qtySold: 0,
+        }));
+        setSalesItems(items);
+        setCashFinal(String(modalFromReport));
       } finally {
         setLoading(false);
       }
@@ -136,9 +209,17 @@ export default function EndShiftPage() {
 
   // Auto Calculations
   const totalSalesRevenue = salesItems.reduce((acc, item) => acc + item.price * item.qtySold, 0);
+  const totalProductsSold = salesItems.reduce((sum, item) => sum + item.qtySold, 0);
   const expectedTotalCash = cashModal + totalSalesRevenue;
   const finalCashNum = parseInt(cashFinal, 10) || 0;
   const variance = finalCashNum - expectedTotalCash;
+
+  // Cup calculations
+  const totalCupsUsed = cupStocks.reduce((sum, c) => {
+    const finalVal = parseInt(c.qtyFinal, 10) || 0;
+    return sum + Math.max(0, c.qtyInitial - finalVal);
+  }, 0);
+  const cupVariance = totalCupsUsed - totalProductsSold;
 
   const handleQtyChange = (id: string, qtyStr: string) => {
     const qty = parseInt(qtyStr, 10);
@@ -151,6 +232,12 @@ export default function EndShiftPage() {
     });
   };
 
+  const handleCupFinalChange = (cupTypeId: string, valStr: string) => {
+    setCupStocks((prev) =>
+      prev.map((c) => (c.cupTypeId === cupTypeId ? { ...c, qtyFinal: valStr } : c))
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAccessAllowed) {
@@ -159,7 +246,7 @@ export default function EndShiftPage() {
     }
 
     if (!position || position.latitude == null || position.longitude == null) {
-      setError('Akses Ditolak: Anda wajib menekan tombol "Deteksi Lokasi Sekarang" untuk memverifikasi lokasi booth sebelum menutup shift.');
+      setError('Akses Ditolak: Anda wajib menekan tombol "Deteksi Lokasi Booth Saat Ini" untuk memverifikasi lokasi booth sebelum menutup shift.');
       return;
     }
 
@@ -178,6 +265,15 @@ export default function EndShiftPage() {
     try {
       const res = await api.post('/daily-reports/end', {
         cashFinal: finalCashNum,
+        stockItems: cupStocks.map((c) => {
+          const finalVal = parseInt(c.qtyFinal, 10) || 0;
+          return {
+            cupTypeId: c.cupTypeId,
+            qtyInitial: c.qtyInitial,
+            qtyFinal: finalVal,
+            qtySold: Math.max(0, c.qtyInitial - finalVal),
+          };
+        }),
         saleItems: salesItems.map((s) => ({
           productId: s.productId,
           qtySold: s.qtySold,
@@ -296,12 +392,12 @@ export default function EndShiftPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Input Penjualan Produk Teh */}
+        {/* 1. Input Penjualan Produk Teh */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <h2 className="font-bold text-slate-900 text-sm">1. Input Penjualan Produk Teh</h2>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-              {salesItems.reduce((sum, item) => sum + item.qtySold, 0)} Cup Terjual
+              {totalProductsSold} Cup Terjual
             </span>
           </div>
 
@@ -336,12 +432,79 @@ export default function EndShiftPage() {
           </div>
         </div>
 
-        {/* Input Uang Fisik Kasir */}
+        {/* 2. Sisa Stok Cup Akhir Shift (Closing Cup) */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <h2 className="font-bold text-slate-900 text-sm">2. Uang Fisik Akhir di Laci Kasir</h2>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-emerald-600" />
+              <h2 className="font-bold text-slate-900 text-sm">2. Sisa Stok Cup Akhir Shift</h2>
+            </div>
+            <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+              {totalCupsUsed} Cup Terpakai
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Hitung fisik sisa cup di booth saat ini. Stok awal diambil otomatis dari data buka shift pagi.
+          </p>
+
+          <div className="space-y-3">
+            {cupStocks.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2">Memuat varian cup...</p>
+            ) : (
+              cupStocks.map((c) => {
+                const finalNum = parseInt(c.qtyFinal, 10) || 0;
+                const used = Math.max(0, c.qtyInitial - finalNum);
+                return (
+                  <div
+                    key={c.cupTypeId}
+                    className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-slate-900">{c.cupTypeName}</span>
+                      <span className="text-[11px] text-slate-500">
+                        Awal Shift: <strong className="text-slate-800">{c.qtyInitial} pcs</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                          Sisa Cup Fisik:
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            value={c.qtyFinal}
+                            onChange={(e) => handleCupFinalChange(c.cupTypeId, e.target.value)}
+                            placeholder="0"
+                            className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
+                          />
+                          <span className="text-xs font-medium text-slate-500">pcs</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="block text-[11px] font-medium text-slate-500">Cup Terpakai</span>
+                        <span className="text-sm font-extrabold text-emerald-700">
+                          {used} <span className="text-xs font-normal text-slate-500">pcs</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* 3. Input Uang Fisik Kasir */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+          <h2 className="font-bold text-slate-900 text-sm">3. Uang Fisik Akhir di Laci Kasir</h2>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
-              Total Uang Kasir (Modal + Omzet Penjualan)
+              Total Uang Kasir Fisik (Modal Shift Pagi + Omzet Penjualan)
             </label>
             <input
               type="number"
@@ -355,28 +518,28 @@ export default function EndShiftPage() {
           </div>
         </div>
 
-        {/* Ringkasan & Kalkulasi Selisih Kasir Otomatis */}
+        {/* 4. Rekonsiliasi Kasir & Stok Otomatis */}
         <div className="rounded-xl border border-slate-200 bg-slate-900 p-5 text-white shadow-sm space-y-3">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
             <Calculator className="w-4 h-4 text-emerald-400" />
-            <h2 className="font-bold text-sm text-white">3. Rekonsiliasi Kasir Otomatis</h2>
+            <h2 className="font-bold text-sm text-white">4. Rekonsiliasi Kasir & Stok Otomatis</h2>
           </div>
 
-          <div className="space-y-1.5 text-xs">
+          <div className="space-y-2 text-xs">
             <div className="flex justify-between text-slate-300">
-              <span>Modal Awal Kas:</span>
-              <span>{formatRupiah(cashModal)}</span>
+              <span>Modal Awal Kas (Shift Pagi):</span>
+              <span className="font-semibold text-white">{formatRupiah(cashModal)}</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span>Total Omzet Penjualan:</span>
               <span className="font-semibold text-emerald-400">{formatRupiah(totalSalesRevenue)}</span>
             </div>
-            <div className="flex justify-between font-bold text-white pt-1 border-t border-slate-800">
+            <div className="flex justify-between font-bold text-white pt-1.5 border-t border-slate-800">
               <span>Uang Kas Seharusnya:</span>
               <span>{formatRupiah(expectedTotalCash)}</span>
             </div>
             <div className="flex justify-between font-bold pt-1">
-              <span>Selisih Kasir (Variance):</span>
+              <span>Selisih Kasir (Cash Variance):</span>
               <span
                 data-testid="variance-display"
                 className={`text-sm ${
@@ -390,12 +553,20 @@ export default function EndShiftPage() {
                 {variance === 0 ? 'Rp 0 (Pas ✓)' : formatRupiah(variance)}
               </span>
             </div>
+
+            {/* Rekonsiliasi Cup Fisik vs Produk Terjual */}
+            <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
+              <span className="text-slate-300">Rekonsiliasi Cup:</span>
+              <span className={`font-semibold ${cupVariance === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {totalCupsUsed} cup fisik / {totalProductsSold} porsi teh ({cupVariance === 0 ? 'Cocok ✓' : `${cupVariance > 0 ? `+${cupVariance}` : cupVariance} cup selisih`})
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Catatan Tambahan */}
+        {/* 5. Catatan Operasional Shift */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">
-          <h2 className="font-bold text-slate-900 text-sm">4. Catatan Operasional Shift</h2>
+          <h2 className="font-bold text-slate-900 text-sm">5. Catatan Operasional Shift</h2>
           <textarea
             data-testid="shift-notes-input"
             rows={2}
@@ -406,10 +577,10 @@ export default function EndShiftPage() {
           />
         </div>
 
-        {/* Validasi Geolocation Radius 200m */}
+        {/* 6. Validasi Geolocation Radius 200m */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-slate-900 text-sm">5. Validasi Lokasi Geolocation (GPS)</h2>
+            <h2 className="font-bold text-slate-900 text-sm">6. Validasi Lokasi Geolocation (GPS)</h2>
             <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
               Maks: 200 Meter
             </span>
