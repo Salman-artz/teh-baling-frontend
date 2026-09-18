@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Pencil, Trash2, Download, FileSpreadsheet, Calendar, Sun, Sunset, Store, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { api, downloadFile } from '@/lib/api-client';
 import { getWibDateString, getWibHourDec } from '@/lib/utils';
@@ -100,7 +100,7 @@ export default function AssignmentsPage() {
   const [exportLoading, setExportLoading] = useState(false);
 
   // 1. Fetch Real Active Booths
-  const fetchBooths = async () => {
+  const fetchBooths = useCallback(async () => {
     try {
       const res = await api.get<BoothOption[]>('/booths?status=active');
       if (res.success && Array.isArray(res.data)) {
@@ -112,10 +112,10 @@ export default function AssignmentsPage() {
     } catch {
       // fallback
     }
-  };
+  }, [boothId]);
 
   // 2. Fetch Real Users (Attendants Only - Admin & Produksi dikecualikan)
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await api.get<UserOption[]>('/users?role=BOOTH_ATTENDANT');
       if (res.success && Array.isArray(res.data)) {
@@ -128,10 +128,10 @@ export default function AssignmentsPage() {
     } catch {
       // fallback
     }
-  };
+  }, [userId]);
 
   // 3. Fetch Real Assignments
-  const fetchAssignments = async () => {
+  const fetchAssignments = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get<AssignmentItem[]>('/booth-assignments');
@@ -143,13 +143,13 @@ export default function AssignmentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchBooths();
     fetchUsers();
     fetchAssignments();
-  }, []);
+  }, [fetchBooths, fetchUsers, fetchAssignments]);
 
   const handleExportExcel = async () => {
     setExportLoading(true);

@@ -61,7 +61,14 @@ export async function downloadFile(endpoint: string, fallbackFilename: string): 
   }
 }
 
+const inFlightGetRequests = new Map<string, Promise<ApiResponse<unknown>>>();
+
 export async function apiClient<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
+  const isGet = !options || !options.method || options.method === 'GET';
+  if (isGet && inFlightGetRequests.has(endpoint)) {
+    return inFlightGetRequests.get(endpoint) as Promise<ApiResponse<T>>;
+  }
+
   const token = getAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -69,13 +76,25 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
     ...options?.headers,
   };
 
-  try {
-    const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
-    const json = (await res.json()) as ApiResponse<T>;
-    return json;
-  } catch {
-    return { success: false, error: { code: 'NETWORK_ERROR', message: 'Koneksi jaringan terputus.' } };
+  const reqPromise = (async () => {
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+      const json = (await res.json()) as ApiResponse<T>;
+      return json;
+    } catch {
+      return { success: false, error: { code: 'NETWORK_ERROR', message: 'Koneksi jaringan terputus.' } };
+    } finally {
+      if (isGet) {
+        inFlightGetRequests.delete(endpoint);
+      }
+    }
+  })();
+
+  if (isGet) {
+    inFlightGetRequests.set(endpoint, reqPromise);
   }
+
+  return reqPromise;
 }
 
 export const api = {

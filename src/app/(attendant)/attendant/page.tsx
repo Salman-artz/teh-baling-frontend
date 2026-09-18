@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibTimeString, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -55,7 +55,7 @@ export default function AttendantHomePage() {
   const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
   const [loadingAssignment, setLoadingAssignment] = useState(false);
 
-  const fetchTodayAssignment = async () => {
+  const fetchTodayAssignment = useCallback(async () => {
     setLoadingAssignment(true);
     const todayStr = getWibDateString();
 
@@ -93,7 +93,7 @@ export default function AttendantHomePage() {
     } finally {
       setLoadingAssignment(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchTodayAssignment();
@@ -106,7 +106,7 @@ export default function AttendantHomePage() {
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [fetchTodayAssignment]);
 
   const hasAssignment = Boolean(assignment);
   const assignedShift = assignment?.shiftType || 'PAGI';
