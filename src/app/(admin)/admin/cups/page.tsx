@@ -57,9 +57,10 @@ export default function CupsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [cupRes, seriesRes] = await Promise.all([
+    const [cupRes, seriesRes, rulesRes] = await Promise.all([
       api.get<CupTypeItem[]>('/cup-types?all=true'),
       api.get<SeriesOption[]>('/tea-series?all=true'),
+      api.get<SeriesCupRule[]>('/cup-rules'),
     ]);
 
     if (cupRes.success && cupRes.data) {
@@ -69,6 +70,12 @@ export default function CupsPage() {
       setSeriesOptions(seriesRes.data);
       if (seriesRes.data.length > 0 && !selectedSeriesId) {
         setSelectedSeriesId(seriesRes.data[0].id);
+      }
+    }
+    if (rulesRes.success && Array.isArray(rulesRes.data) && rulesRes.data.length > 0) {
+      setRules(rulesRes.data);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rulesRes.data));
       }
     }
     setLoading(false);
@@ -82,12 +89,15 @@ export default function CupsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    if (rules.length > 0) return;
+
     const savedRulesStr = localStorage.getItem(STORAGE_KEY);
     if (savedRulesStr) {
       try {
         const parsed = JSON.parse(savedRulesStr) as SeriesCupRule[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           setRules(parsed);
+          api.post('/cup-rules', { rules: parsed }).catch(() => {});
           return;
         }
       } catch {
@@ -118,6 +128,7 @@ export default function CupsPage() {
       });
       setRules(initialRules);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialRules));
+      api.post('/cup-rules', { rules: initialRules }).catch(() => {});
     }
   }, [seriesOptions, cupList, rules.length]);
 
@@ -127,6 +138,7 @@ export default function CupsPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newRules));
     }
+    api.post('/cup-rules', { rules: newRules }).catch(() => {});
   };
 
   // Direct Inline Matrix Price / Status Update (Dynamic)
@@ -154,6 +166,7 @@ export default function CupsPage() {
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
       }
+      api.post('/cup-rules', { rules: updatedRules }).catch(() => {});
       return updatedRules;
     });
 
@@ -183,6 +196,7 @@ export default function CupsPage() {
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRules));
       }
+      api.post('/cup-rules', { rules: updatedRules }).catch(() => {});
       return updatedRules;
     });
 

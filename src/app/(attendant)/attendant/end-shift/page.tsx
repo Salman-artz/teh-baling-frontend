@@ -36,7 +36,14 @@ interface ProductItem {
 interface CupTypeItem {
   id: string;
   name: string;
-  price: number;
+  price?: number;
+  isActive?: boolean;
+}
+
+interface SeriesCupRule {
+  seriesId: string;
+  seriesName: string;
+  cupPrices: Record<string, { enabled: boolean; price: number }>;
 }
 
 interface ProductCupSaleItem {
@@ -107,11 +114,12 @@ export default function EndShiftPage() {
       const todayStr = getWibDateString();
 
       try {
-        const [assignRes, prodRes, cupRes, reportRes] = await Promise.all([
+        const [assignRes, prodRes, cupRes, reportRes, rulesRes] = await Promise.all([
           api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`),
           api.get<ProductItem[]>('/tea-products'),
           api.get<CupTypeItem[]>('/cup-types'),
           api.get<TodayReportData>(`/daily-reports/today?date=${todayStr}`),
+          api.get<SeriesCupRule[]>('/cup-rules'),
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
@@ -151,6 +159,7 @@ export default function EndShiftPage() {
         const rawCups = cupRes.success && Array.isArray(cupRes.data) && cupRes.data.length > 0
           ? cupRes.data
           : defaultCupTypes;
+        const activeCups = rawCups.filter((c) => c.isActive !== false);
 
         const defaultProducts: ProductItem[] = [
           { id: '11111111-1111-1111-1111-111111111101', name: 'Teh Baling Melati Original' },
@@ -163,9 +172,11 @@ export default function EndShiftPage() {
           : defaultProducts;
         setProducts(rawProducts);
 
-        // Muat aturan mapping cup & harga per series dari konfigurasi Admin
-        let storedRules: { seriesId: string; seriesName: string; cupPrices: Record<string, { enabled: boolean; price: number }> }[] = [];
-        if (typeof window !== 'undefined') {
+        // Muat aturan mapping cup & harga per series dari backend & localStorage
+        let storedRules: SeriesCupRule[] = [];
+        if (rulesRes.success && Array.isArray(rulesRes.data) && rulesRes.data.length > 0) {
+          storedRules = rulesRes.data;
+        } else if (typeof window !== 'undefined') {
           const rulesStr = localStorage.getItem('teh_baling_cup_rules');
           if (rulesStr) {
             try {
@@ -176,26 +187,37 @@ export default function EndShiftPage() {
           }
         }
 
-        // Buat daftar kombinasi produk x ukuran cup dengan harga dari mapping admin
+        // Buat daftar kombinasi produk x ukuran cup dengan harga dari matriks mapping series
         const saleItemsList: ProductCupSaleItem[] = [];
         rawProducts.forEach((p) => {
-          // Cari aturan mapping yang cocok untuk produk/series ini
+          // Cari aturan mapping series yang cocok
           const matchedRule = storedRules.find(
             (r) =>
               (p.seriesId && r.seriesId === p.seriesId) ||
-              (p.seriesName && r.seriesName?.toLowerCase() === p.seriesName?.toLowerCase()) ||
-              (p.name && r.seriesName && p.name.toLowerCase().includes(r.seriesName.toLowerCase().replace(' series', '')))
+              (p.seriesName && r.seriesName && r.seriesName.trim().toLowerCase() === p.seriesName.trim().toLowerCase()) ||
+              (p.name && r.seriesName && p.name.toLowerCase().includes(r.seriesName.toLowerCase().replace(' series', '').trim())) ||
+              (p.name && r.seriesName && r.seriesName.toLowerCase().includes(p.name.toLowerCase().trim()))
           );
 
-          rawCups.forEach((cup) => {
-            const cupConfig = matchedRule?.cupPrices?.[cup.id];
-            
-            // Cek apakah ukuran cup ini diaktifkan di admin (default true jika belum diatur)
-            const isEnabled = cupConfig !== undefined ? cupConfig.enabled : true;
+          activeCups.forEach((cup) => {
+            let isEnabled = false;
+            let price = 10000;
+
+            if (matchedRule && matchedRule.cupPrices) {
+              const cupConfig = matchedRule.cupPrices[cup.id];
+              if (cupConfig !== undefined) {
+                isEnabled = Boolean(cupConfig.enabled);
+                price = Number(cupConfig.price) || 0;
+              } else {
+                isEnabled = false;
+              }
+            } else {
+              // Jika aturan belum ada, default semua cup aktif tersedia
+              isEnabled = true;
+              price = cup.price || 10000;
+            }
 
             if (isEnabled) {
-              const price = cupConfig?.price !== undefined ? cupConfig.price : (cup.price || 10000);
-
               saleItemsList.push({
                 id: `${p.id}-${cup.id}`,
                 productId: p.id,
@@ -210,8 +232,8 @@ export default function EndShiftPage() {
         });
         setSalesItems(saleItemsList);
 
-        // Inisialisasi stok closing cup
-        const closings: CupStockClosing[] = rawCups.map((c) => {
+        // Inisialisasi stok closing cup (hanya cup aktif)
+        const closings: CupStockClosing[] = activeCups.map((c) => {
           const initial = initialStockMap[c.id] !== undefined ? initialStockMap[c.id] : 50;
           return {
             cupTypeId: c.id,
