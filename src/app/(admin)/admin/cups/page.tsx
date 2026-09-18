@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Pencil, Trash2, Settings, Plus, X, RefreshCw, AlertCircle, Package } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
@@ -131,76 +131,75 @@ export default function CupsPage() {
     fetchData();
   }, [fetchData]);
 
-  // Helper to persist rules
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper to persist rules (Instant UI + Debounced Server Sync)
   const savePersistedRules = (newRules: ProductCupRule[]) => {
     setRules(newRules);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newRules));
     }
-    api.post('/cup-rules', { rules: newRules }).catch(() => {});
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    syncTimeoutRef.current = setTimeout(() => {
+      api.post('/cup-rules', { rules: newRules }).catch(() => {});
+    }, 400);
   };
 
   // Live Inline Matrix Edit (Product-based)
   const handleInlineCupPriceChange = (productId: string, productName: string, seriesName: string | null | undefined, cupId: string, priceVal: number) => {
-    setRules((prev) => {
-      const matchFn = (r: ProductCupRule) =>
-        (r.productId && r.productId === productId) ||
-        (r.productName && r.productName.trim().toLowerCase() === productName.trim().toLowerCase());
+    const matchFn = (r: ProductCupRule) =>
+      (r.productId && r.productId === productId) ||
+      (r.productName && r.productName.trim().toLowerCase() === productName.trim().toLowerCase());
 
-      const existing = prev.find(matchFn) || {
-        id: `rule_${productId}`,
-        productId,
-        productName,
-        seriesName,
-        cupPrices: {},
-      };
+    const existing = rules.find(matchFn) || {
+      id: `rule_${productId}`,
+      productId,
+      productName,
+      seriesName,
+      cupPrices: {},
+    };
 
-      const prevConfig = existing.cupPrices[cupId] || { enabled: true, price: 10000 };
-      const updatedConfig = {
-        ...prevConfig,
-        price: isNaN(priceVal) ? 0 : priceVal,
-      };
+    const prevConfig = existing.cupPrices[cupId] || { enabled: true, price: 10000 };
+    const updatedConfig = {
+      ...prevConfig,
+      price: isNaN(priceVal) ? 0 : priceVal,
+    };
 
-      const updatedRules = prev.some(matchFn)
-        ? prev.map((r) => (matchFn(r) ? { ...r, productId, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
-        : [...prev, { ...existing, productId, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
+    const updatedRules = rules.some(matchFn)
+      ? rules.map((r) => (matchFn(r) ? { ...r, productId, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
+      : [...rules, { ...existing, productId, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
 
-      savePersistedRules(updatedRules);
-      return updatedRules;
-    });
-
+    savePersistedRules(updatedRules);
     setSaveStatus('✓ Perubahan harga tersimpan');
     setTimeout(() => setSaveStatus(null), 2000);
   };
 
   const handleInlineCupToggle = (productId: string, productName: string, seriesName: string | null | undefined, cupId: string, enabled: boolean) => {
-    setRules((prev) => {
-      const matchFn = (r: ProductCupRule) =>
-        (r.productId && r.productId === productId) ||
-        (r.productName && r.productName.trim().toLowerCase() === productName.trim().toLowerCase());
+    const matchFn = (r: ProductCupRule) =>
+      (r.productId && r.productId === productId) ||
+      (r.productName && r.productName.trim().toLowerCase() === productName.trim().toLowerCase());
 
-      const existing = prev.find(matchFn) || {
-        id: `rule_${productId}`,
-        productId,
-        productName,
-        seriesName,
-        cupPrices: {},
-      };
+    const existing = rules.find(matchFn) || {
+      id: `rule_${productId}`,
+      productId,
+      productName,
+      seriesName,
+      cupPrices: {},
+    };
 
-      const prevConfig = existing.cupPrices[cupId] || { enabled: !enabled, price: 10000 };
-      const updatedConfig = {
-        ...prevConfig,
-        enabled,
-      };
+    const prevConfig = existing.cupPrices[cupId] || { enabled: !enabled, price: 10000 };
+    const updatedConfig = {
+      ...prevConfig,
+      enabled,
+    };
 
-      const updatedRules = prev.some(matchFn)
-        ? prev.map((r) => (matchFn(r) ? { ...r, productId, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
-        : [...prev, { ...existing, productId, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
+    const updatedRules = rules.some(matchFn)
+      ? rules.map((r) => (matchFn(r) ? { ...r, productId, productName, seriesName, cupPrices: { ...r.cupPrices, [cupId]: updatedConfig } } : r))
+      : [...rules, { ...existing, productId, productName, seriesName, cupPrices: { ...existing.cupPrices, [cupId]: updatedConfig } }];
 
-      savePersistedRules(updatedRules);
-      return updatedRules;
-    });
-
+    savePersistedRules(updatedRules);
     setSaveStatus('✓ Status cup tersimpan');
     setTimeout(() => setSaveStatus(null), 2000);
   };
