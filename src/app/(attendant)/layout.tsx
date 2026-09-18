@@ -16,6 +16,8 @@ export default function AttendantLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
+  const displayName = user?.name || user?.email || 'Attendant';
+
   const handleLogout = () => {
     logout();
     window.location.href = '/login';
@@ -36,14 +38,14 @@ export default function AttendantLayout({ children }: { children: React.ReactNod
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-semibold text-white">{user?.name || 'Rina Attendant'}</p>
+          <div className="text-right">
+            <p className="text-xs font-semibold text-white">{displayName}</p>
             <p className="text-[10px] text-emerald-300 font-mono">ATTENDANT</p>
           </div>
           <button
             onClick={handleLogout}
             title="Keluar"
-            className="p-2 rounded-lg bg-emerald-800 text-emerald-200 hover:text-white hover:bg-emerald-700 transition"
+            className="p-2 rounded-lg bg-emerald-800 text-emerald-200 hover:text-white hover:bg-emerald-700 transition cursor-pointer"
           >
             <LogOut className="h-4 w-4" />
           </button>

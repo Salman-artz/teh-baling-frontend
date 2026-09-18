@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -19,13 +19,6 @@ export default function LoginPage() {
     if (role === 'PRODUCTION') return '/production';
     return '/admin';
   };
-
-  // Redirect logged-in users away from /login to their dashboard
-  useEffect(() => {
-    if (user && accessToken) {
-      router.replace(getDashboardUrl(user.role));
-    }
-  }, [user, accessToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

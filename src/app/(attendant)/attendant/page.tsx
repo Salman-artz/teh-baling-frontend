@@ -53,7 +53,8 @@ export default function AttendantHomePage() {
           (a) =>
             (storedUser?.id && a.userId === storedUser.id) ||
             (storedUser?.email && a.userEmail?.toLowerCase() === storedUser.email.toLowerCase()) ||
-            (storedUser?.name && a.userName?.toLowerCase().includes(storedUser.name.toLowerCase()))
+            (storedUser?.name && a.userName?.toLowerCase().includes(storedUser.name.toLowerCase())) ||
+            (storedUser?.name && a.userName && storedUser.name.toLowerCase().includes(a.userName.toLowerCase()))
         );
         setAssignment(myAssignment || null);
         if (myAssignment?.shiftType === 'SORE' || myAssignment?.shiftType === 'PAGI') {
