@@ -12,7 +12,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   setAuth: (user: AuthUser, token: string, refreshToken?: string) => void;
-  logout: () => Promise<void>;
+  logout: () => void;
   isAuthenticated: () => boolean;
 }
 
@@ -66,24 +66,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user, accessToken, refreshToken: refreshToken || null });
   },
 
-  logout: async () => {
+  logout: () => {
     const currentToken = get().accessToken;
-    // M-1 Fix: Server-side token revocation call
-    if (currentToken && typeof window !== 'undefined') {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-        await fetch(`${apiUrl}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${currentToken}`,
-          },
-        }).catch(() => {});
-      } catch {
-        // Continue logout even if network fails
-      }
-    }
 
+    // 1. Hapus cookie dan localStorage secara instan
     deleteCookie('access_token');
     deleteCookie('refresh_token');
 
@@ -91,9 +77,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('auth_user');
+      localStorage.removeItem('tehbaling_token');
     }
 
+    // 2. Reset state Zustand seketika
     set({ user: null, accessToken: null, refreshToken: null });
+
+    // 3. Panggil server token revocation di background (non-blocking)
+    if (currentToken && typeof window !== 'undefined') {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+        fetch(`${apiUrl}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${currentToken}`,
+          },
+        }).catch(() => {});
+      } catch {
+        // Abaikan jika network offline
+      }
+    }
   },
 
   isAuthenticated: () => get().accessToken !== null,

@@ -16,7 +16,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
   const handleLogout = () => {
     logout();
-    window.location.href = '/login';
+    window.location.replace('/login');
   };
 
   return (

@@ -20,7 +20,7 @@ export default function AttendantLayout({ children }: { children: React.ReactNod
 
   const handleLogout = () => {
     logout();
-    window.location.href = '/login';
+    window.location.replace('/login');
   };
 
   return (
