@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
+import { getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
@@ -55,18 +56,10 @@ export default function StartShiftPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Ambil waktu WIB (UTC+7)
-  const getWibNow = () => {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    return new Date(utc + 3600000 * 7);
-  };
-
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const wib = getWibNow();
-      const todayStr = wib.toISOString().split('T')[0]!;
+      const todayStr = getWibDateString();
 
       try {
         const [assignRes, cupRes] = await Promise.all([
@@ -75,11 +68,12 @@ export default function StartShiftPage() {
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
+          const storedUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null);
           const myAssignment = assignRes.data.find(
             (a) =>
-              (user?.id && a.userId === user.id) ||
-              (user?.email && a.userEmail?.toLowerCase() === user.email.toLowerCase()) ||
-              (user?.email && a.userName.toLowerCase().includes(user.email.toLowerCase()))
+              (storedUser?.id && a.userId === storedUser.id) ||
+              (storedUser?.email && a.userEmail?.toLowerCase() === storedUser.email.toLowerCase()) ||
+              (storedUser?.name && a.userName?.toLowerCase().includes(storedUser.name.toLowerCase()))
           );
           setAssignment(myAssignment || null);
         }
@@ -100,11 +94,10 @@ export default function StartShiftPage() {
     loadData();
   }, [user]);
 
-  const wib = getWibNow();
-  const currentHourDec = wib.getHours() + wib.getMinutes() / 60;
+  const currentHourDec = getWibHourDec();
 
-  // Auto-detect sesi (Pagi 07:00-16:00 / Sore 14:00-21:00)
-  const activeSession: ShiftSession = currentHourDec >= 14.0 ? 'SORE' : 'PAGI';
+  // Sesi ditentukan dari jadwal penugasan attendant jika ada, atau auto-detect waktu
+  const activeSession: ShiftSession = (assignment?.shiftType as ShiftSession) || (currentHourDec >= 14.0 ? 'SORE' : 'PAGI');
   const hasAssignment = Boolean(assignment);
 
   const isPagi = activeSession === 'PAGI';
@@ -202,7 +195,7 @@ export default function StartShiftPage() {
               Kembali
             </Link>
             <span className="text-xs text-slate-300 font-mono">
-              {wib.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+              {getWibDateFormatted()}
             </span>
           </div>
           <h1 className="text-xl font-bold">Presensi Mulai Shift</h1>
@@ -258,7 +251,7 @@ export default function StartShiftPage() {
             Kembali
           </Link>
           <span className="text-xs text-emerald-200 font-mono">
-            {wib.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            {getWibDateFormatted()}
           </span>
         </div>
         <h1 className="text-xl font-bold">Laporan Awal Shift ({isPagi ? 'Pagi' : 'Sore'})</h1>

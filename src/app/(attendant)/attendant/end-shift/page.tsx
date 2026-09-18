@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
-import { formatRupiah } from '@/lib/utils';
+import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 
@@ -29,7 +29,6 @@ interface AssignmentData {
 interface ProductItem {
   id: string;
   name: string;
-  seriesName?: string;
 }
 
 interface SalesItem {
@@ -66,18 +65,10 @@ export default function EndShiftPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Ambil waktu WIB (UTC+7)
-  const getWibNow = () => {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    return new Date(utc + 3600000 * 7);
-  };
-
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const wib = getWibNow();
-      const todayStr = wib.toISOString().split('T')[0]!;
+      const todayStr = getWibDateString();
 
       try {
         const [assignRes, prodRes] = await Promise.all([
@@ -86,11 +77,12 @@ export default function EndShiftPage() {
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
+          const storedUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null);
           const myAssignment = assignRes.data.find(
             (a) =>
-              (user?.id && a.userId === user.id) ||
-              (user?.email && a.userEmail?.toLowerCase() === user.email.toLowerCase()) ||
-              (user?.email && a.userName.toLowerCase().includes(user.email.toLowerCase()))
+              (storedUser?.id && a.userId === storedUser.id) ||
+              (storedUser?.email && a.userEmail?.toLowerCase() === storedUser.email.toLowerCase()) ||
+              (storedUser?.name && a.userName?.toLowerCase().includes(storedUser.name.toLowerCase()))
           );
           setAssignment(myAssignment || null);
         }
@@ -113,11 +105,10 @@ export default function EndShiftPage() {
     loadData();
   }, [user]);
 
-  const wib = getWibNow();
-  const currentHourDec = wib.getHours() + wib.getMinutes() / 60;
+  const currentHourDec = getWibHourDec();
 
-  // Auto-detect sesi (Pagi 09:00-18:00 / Sore 16:00-23:00)
-  const activeSession: ShiftSession = currentHourDec >= 16.0 ? 'SORE' : 'PAGI';
+  // Sesi ditentukan dari jadwal penugasan attendant jika ada, atau auto-detect waktu
+  const activeSession: ShiftSession = (assignment?.shiftType as ShiftSession) || (currentHourDec >= 16.0 ? 'SORE' : 'PAGI');
   const hasAssignment = Boolean(assignment);
 
   const isPagi = activeSession === 'PAGI';
@@ -226,7 +217,7 @@ export default function EndShiftPage() {
               Kembali
             </Link>
             <span className="text-xs text-slate-300 font-mono">
-              {wib.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+              {getWibDateFormatted()}
             </span>
           </div>
           <h1 className="text-xl font-bold">Laporan Akhir Shift</h1>
@@ -282,7 +273,7 @@ export default function EndShiftPage() {
             Kembali
           </Link>
           <span className="text-xs text-slate-300 font-mono">
-            {wib.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            {getWibDateFormatted()}
           </span>
         </div>
         <h1 className="text-xl font-bold">Closing Shift Kasir ({isPagi ? 'Pagi' : 'Sore'})</h1>

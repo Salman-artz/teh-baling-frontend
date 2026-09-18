@@ -35,8 +35,18 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
+function getStoredUser(): AuthUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('auth_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
+  user: typeof window !== 'undefined' ? getStoredUser() : null,
   accessToken: typeof window !== 'undefined' ? getCookie('access_token') || localStorage.getItem('access_token') : null,
   refreshToken: typeof window !== 'undefined' ? getCookie('refresh_token') || localStorage.getItem('refresh_token') : null,
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Pencil, Trash2, Download, FileSpreadsheet, Calendar, Sun, Sunset, Store, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { api, downloadFile } from '@/lib/api-client';
+import { getWibDateString, getWibHourDec } from '@/lib/utils';
 
 type ShiftType = 'PAGI' | 'SORE';
 
@@ -15,15 +16,9 @@ function getDynamicShiftStatus(
     return { status: 'Selesai (Shift Ditutup)', category: 'completed' };
   }
 
-  // Ambil waktu WIB (UTC+7)
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const wibDate = new Date(utc + 3600000 * 7);
-
-  const todayStr = wibDate.toISOString().split('T')[0]!;
-  const currentHour = wibDate.getHours();
-  const currentMinute = wibDate.getMinutes();
-  const currentTimeDec = currentHour + currentMinute / 60;
+  // Ambil tanggal & waktu WIB (Asia/Jakarta)
+  const todayStr = getWibDateString();
+  const currentTimeDec = getWibHourDec();
 
   // 1. Tanggal sebelum hari ini -> Selesai / Terlewat
   if (shiftDate < todayStr) {
@@ -85,7 +80,7 @@ interface AssignmentItem {
 }
 
 export default function AssignmentsPage() {
-  const todayStr = new Date().toISOString().split('T')[0]!;
+  const todayStr = getWibDateString();
 
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [boothOptions, setBoothOptions] = useState<BoothOption[]>([]);

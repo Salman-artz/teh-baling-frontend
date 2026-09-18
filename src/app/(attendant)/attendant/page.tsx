@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { formatRupiah } from '@/lib/utils';
+import { formatRupiah, getWibDateString, getWibHourDec, getWibTimeString, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/lib/api-client';
 import {
@@ -41,28 +41,24 @@ export default function AttendantHomePage() {
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
   const [loadingAssignment, setLoadingAssignment] = useState(false);
 
-  // Ambil waktu WIB (UTC+7)
-  const getWibNow = () => {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    return new Date(utc + 3600000 * 7);
-  };
-
   const fetchTodayAssignment = async () => {
     setLoadingAssignment(true);
-    const wib = getWibNow();
-    const todayStr = wib.toISOString().split('T')[0]!;
+    const todayStr = getWibDateString();
 
     try {
       const res = await api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`);
       if (res.success && Array.isArray(res.data)) {
+        const storedUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null);
         const myAssignment = res.data.find(
           (a) =>
-            (user?.id && a.userId === user.id) ||
-            (user?.email && a.userEmail?.toLowerCase() === user.email.toLowerCase()) ||
-            (user?.email && a.userName.toLowerCase().includes(user.email.toLowerCase()))
+            (storedUser?.id && a.userId === storedUser.id) ||
+            (storedUser?.email && a.userEmail?.toLowerCase() === storedUser.email.toLowerCase()) ||
+            (storedUser?.name && a.userName?.toLowerCase().includes(storedUser.name.toLowerCase()))
         );
         setAssignment(myAssignment || null);
+        if (myAssignment?.shiftType === 'SORE' || myAssignment?.shiftType === 'PAGI') {
+          setActiveSession(myAssignment.shiftType as ShiftSession);
+        }
       } else {
         setAssignment(null);
       }
@@ -77,13 +73,8 @@ export default function AttendantHomePage() {
     fetchTodayAssignment();
 
     const updateTime = () => {
-      const wib = getWibNow();
-      setWibTimeStr(
-        wib.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB'
-      );
-      setTodayDateFormatted(
-        wib.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })
-      );
+      setWibTimeStr(getWibTimeString());
+      setTodayDateFormatted(getWibDateFormatted());
     };
 
     updateTime();
@@ -92,12 +83,13 @@ export default function AttendantHomePage() {
   }, [user]);
 
   const hasAssignment = Boolean(assignment);
+  const assignedShift = assignment?.shiftType || 'PAGI';
+  const isCorrectShiftSession = !assignment || assignment.shiftType === activeSession;
 
   // Evaluasi Rule Akses Window Shift:
   // - Shift Pagi (09:00 - 16:00 WIB) -> Start: 07:00-16:00 | End: 09:00-18:00
   // - Shift Sore (16:00 - 21:00 WIB) -> Start: 14:00-21:00 | End: 16:00-23:00
-  const wib = getWibNow();
-  const currentHourDec = wib.getHours() + wib.getMinutes() / 60;
+  const currentHourDec = getWibHourDec();
 
   const isPagi = activeSession === 'PAGI';
   const startWindowMin = isPagi ? 7.0 : 14.0;
@@ -108,12 +100,14 @@ export default function AttendantHomePage() {
   const isTimeValidForStart = currentHourDec >= startWindowMin && currentHourDec <= startWindowMax;
   const isTimeValidForEnd = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
 
-  const canStartShift = hasAssignment && isTimeValidForStart;
-  const canEndShift = hasAssignment && isTimeValidForEnd;
+  const canStartShift = hasAssignment && isCorrectShiftSession && isTimeValidForStart;
+  const canEndShift = hasAssignment && isCorrectShiftSession && isTimeValidForEnd;
 
   let startDisabledReason = '';
   if (!hasAssignment) {
-    startDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift ${isPagi ? 'pagi' : 'sore'} hari ini di database.`;
+    startDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift hari ini di database.`;
+  } else if (!isCorrectShiftSession) {
+    startDisabledReason = `Akses Terkunci: Anda dijadwalkan pada Shift ${assignedShift === 'PAGI' ? 'PAGI (09:00 - 16:00)' : 'SORE (16:00 - 21:00)'}. Silakan klik tab Shift ${assignedShift === 'PAGI' ? 'Pagi' : 'Sore'} di atas.`;
   } else if (currentHourDec < startWindowMin) {
     startDisabledReason = `Akses buka shift dibuka mulai pukul ${isPagi ? '07:00' : '14:00'} WIB (2 jam sebelum shift).`;
   } else if (currentHourDec > startWindowMax) {
@@ -122,12 +116,15 @@ export default function AttendantHomePage() {
 
   let endDisabledReason = '';
   if (!hasAssignment) {
-    endDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift ${isPagi ? 'pagi' : 'sore'} hari ini di database.`;
+    endDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift hari ini di database.`;
+  } else if (!isCorrectShiftSession) {
+    endDisabledReason = `Akses Terkunci: Anda dijadwalkan pada Shift ${assignedShift === 'PAGI' ? 'PAGI (09:00 - 16:00)' : 'SORE (16:00 - 21:00)'}. Silakan klik tab Shift ${assignedShift === 'PAGI' ? 'Pagi' : 'Sore'} di atas.`;
   } else if (currentHourDec < endWindowMin) {
     endDisabledReason = `Akses tutup shift dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '16:00'} WIB).`;
   } else if (currentHourDec > endWindowMax) {
     endDisabledReason = `Waktu tutup shift kasir telah lewat (Toleransi maksimal pukul ${isPagi ? '18:00' : '23:00'} WIB).`;
   }
+
 
   return (
     <div className="space-y-6">
