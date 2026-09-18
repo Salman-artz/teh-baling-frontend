@@ -7,7 +7,7 @@ import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, Package } from 'lucide-react';
+import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, Package, ShieldCheck } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -53,7 +53,11 @@ interface TodayReportData {
   cashModal: number;
   cashFinal?: number | null;
   status: string;
+  notes?: string | null;
+  gpsTimeStart?: string | null;
+  gpsTimeEnd?: string | null;
   stockItems?: { cupTypeId: string; qtyInitial: number; qtySold?: number }[];
+  saleItems?: { productId: string; cupTypeId?: string; qtySold: number }[];
 }
 
 interface SalesItem {
@@ -82,6 +86,7 @@ export default function EndShiftPage() {
   const { position, error: gpsError, loading: gpsLoading, requestPosition } = useGeolocation();
 
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
+  const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
   const [salesItems, setSalesItems] = useState<SalesItem[]>([]);
   const [cupStocks, setCupStocks] = useState<CupStockClosing[]>([]);
   const [cashModal, setCashModal] = useState<number>(50000);
@@ -120,6 +125,7 @@ export default function EndShiftPage() {
         let modalFromReport = 50000;
 
         if (reportRes.success && reportRes.data) {
+          setTodayReport(reportRes.data);
           if (reportRes.data.cashModal !== undefined && reportRes.data.cashModal !== null) {
             modalFromReport = reportRes.data.cashModal;
             setCashModal(modalFromReport);
@@ -245,6 +251,11 @@ export default function EndShiftPage() {
       return;
     }
 
+    if (todayReport?.status === 'CLOSED') {
+      setError('Shift hari ini sudah ditutup dan laporan closing telah dikunci. Anda tidak dapat mengirim laporan ulang.');
+      return;
+    }
+
     if (!position || position.latitude == null || position.longitude == null) {
       setError('Akses Ditolak: Anda wajib menekan tombol "Deteksi Lokasi Booth Saat Ini" untuk memverifikasi lokasi booth sebelum menutup shift.');
       return;
@@ -305,7 +316,87 @@ export default function EndShiftPage() {
     );
   }
 
-  // JIKA AKSES TERKUNCI -> TAMPILKAN LAYAR LOCK PENUH
+  // 1. JIKA SHIFT SUDAH DITUTUP (STATUS CLOSED) -> KUNCI TIDAK BISA DIEDIT LAGI
+  if (todayReport && todayReport.status === 'CLOSED') {
+    const recordedModal = todayReport.cashModal || 0;
+    const recordedFinal = todayReport.cashFinal || 0;
+    const recordedVariance = recordedFinal - recordedModal;
+
+    return (
+      <div className="space-y-6 pb-24 max-w-lg mx-auto">
+        <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-md">
+          <div className="flex items-center justify-between mb-2">
+            <Link
+              href="/attendant"
+              className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 transition flex items-center gap-1.5 border border-slate-700"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Kembali
+            </Link>
+            <span className="text-xs text-slate-300 font-mono">
+              {getWibDateFormatted()}
+            </span>
+          </div>
+          <h1 className="text-xl font-bold">Laporan Akhir Shift ({isPagi ? 'Pagi' : 'Sore'})</h1>
+          <p className="mt-1 text-xs text-slate-300 flex items-center gap-1">
+            {assignment?.boothName || 'Booth Teh Baling'}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-indigo-200 bg-white p-6 shadow-sm text-center space-y-5">
+          <div className="w-16 h-16 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center mx-auto shadow-xs">
+            <ShieldCheck className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-bold text-indigo-900">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Shift Telah Ditutup & Laporan Dikunci
+            </span>
+            <h2 className="text-lg font-extrabold text-slate-900 pt-1">Closing Shift Selesai</h2>
+            <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+              Laporan tutup shift dan rekonsiliasi kasir telah difinalisasi secara permanen ke database dan tidak dapat diedit ulang.
+            </p>
+          </div>
+
+          {/* Ringkasan Data Closing Tersimpan */}
+          <div className="rounded-xl bg-slate-900 text-white p-5 text-left space-y-3 text-xs shadow-xs">
+            <div className="flex justify-between items-center text-slate-300">
+              <span>Modal Awal Kasir:</span>
+              <span className="font-semibold text-white">{formatRupiah(recordedModal)}</span>
+            </div>
+            <div className="flex justify-between items-center text-slate-300">
+              <span>Uang Fisik Akhir Kasir:</span>
+              <span className="font-bold text-sm text-emerald-400">{formatRupiah(recordedFinal)}</span>
+            </div>
+            <div className="flex justify-between items-center font-bold text-white pt-1.5 border-t border-slate-800">
+              <span>Selisih Kasir:</span>
+              <span className={recordedVariance >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                {formatRupiah(recordedVariance)}
+              </span>
+            </div>
+            {todayReport.notes && (
+              <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                <span className="font-bold text-slate-300">Catatan:</span> {todayReport.notes}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 flex flex-col gap-2.5">
+            <Link
+              href="/attendant"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 px-4 text-sm font-bold text-white hover:bg-slate-800 transition"
+            >
+              Kembali ke Beranda Attendant
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. JIKA AKSES DILUAR JADWAL ATAU TERKUNCI JAM OPERASIONAL -> LAYAR LOCK PENUH
   if (!isAccessAllowed) {
     return (
       <div className="space-y-6 pb-24 max-w-lg mx-auto">
@@ -363,6 +454,7 @@ export default function EndShiftPage() {
     );
   }
 
+  // 3. FORM CLOSING SHIFT
   return (
     <div className="space-y-6 pb-28 max-w-lg mx-auto">
       <div className="rounded-xl bg-slate-900 p-5 text-white shadow-md">
@@ -641,7 +733,7 @@ export default function EndShiftPage() {
             className="flex-1 rounded-xl bg-indigo-800 py-3.5 text-base font-bold text-white shadow-md hover:bg-indigo-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             <Save className="w-5 h-5" />
-            {submitting ? 'Menyimpan...' : currentDistance !== null && currentDistance > 200 ? '⚠️ Lokasi di Luar Radius (Terkunci)' : 'Simpan & Tutup Shift'}
+            {submitting ? 'Menyimpan...' : currentDistance !== null && currentDistance > 200 ? '⚠️ Lokasi di Luar Radius (Terkunci)' : 'Simpan & Finalisasi Tutup Shift (Kunci)'}
           </button>
         </div>
       </form>

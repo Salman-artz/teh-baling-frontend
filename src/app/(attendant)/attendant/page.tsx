@@ -312,7 +312,28 @@ export default function AttendantHomePage() {
 
         <div className="grid grid-cols-1 gap-3">
           {/* Tombol 1: Mulai Shift */}
-          {canStartShift ? (
+          {todayReport?.status === 'OPEN' || todayReport?.status === 'CLOSED' ? (
+            <Link
+              href="/attendant/start-shift"
+              className="flex items-center justify-between p-4 rounded-xl border border-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 transition group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-700 text-white flex items-center justify-center shadow-xs">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-slate-900 text-sm">1. Mulai Shift (Tercatat & Dikunci)</p>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-200/70 px-1.5 py-0.5 rounded">✓ Terkunci</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Modal: {formatRupiah(todayReport.cashModal || 50000)} (Data telah dikunci)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-emerald-700 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          ) : canStartShift ? (
             <Link
               href="/attendant/start-shift"
               className="flex items-center justify-between p-4 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 transition group shadow-xs"
@@ -322,14 +343,8 @@ export default function AttendantHomePage() {
                   <PlayCircle className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="font-bold text-slate-900 text-sm">
-                    {todayReport?.status === 'OPEN' ? '1. Edit Modal / Stok Awal (Shift Aktif)' : '1. Mulai Shift Harian'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {todayReport?.status === 'OPEN'
-                      ? `Modal tersimpan: ${formatRupiah(todayReport.cashModal || 50000)} (Klik untuk revisi)`
-                      : 'Input modal kasir & stok cup awal (Akses Terbuka)'}
-                  </p>
+                  <p className="font-bold text-slate-900 text-sm">1. Mulai Shift Harian</p>
+                  <p className="text-xs text-slate-500">Input modal kasir & stok cup awal (Akses Terbuka)</p>
                 </div>
               </div>
               <ArrowRight className="w-5 h-5 text-emerald-700 group-hover:translate-x-1 transition-transform" />
@@ -349,7 +364,28 @@ export default function AttendantHomePage() {
           )}
 
           {/* Tombol 2: Akhiri Shift */}
-          {canEndShift ? (
+          {todayReport?.status === 'CLOSED' ? (
+            <Link
+              href="/attendant/end-shift"
+              className="flex items-center justify-between p-4 rounded-xl border border-indigo-300 bg-indigo-50/90 hover:bg-indigo-100 transition group shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-indigo-800 text-white flex items-center justify-center shadow-xs">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-slate-900 text-sm">2. Tutup Shift (Closing Selesai)</p>
+                    <span className="text-[10px] font-bold text-indigo-900 bg-indigo-200/70 px-1.5 py-0.5 rounded">✓ Final</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Kas Akhir: {formatRupiah(todayReport.cashFinal || 0)} (Laporan telah dikunci)
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-indigo-700 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          ) : canEndShift ? (
             <Link
               href="/attendant/end-shift"
               className="flex items-center justify-between p-4 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 transition group shadow-xs"
@@ -360,7 +396,7 @@ export default function AttendantHomePage() {
                 </div>
                 <div>
                   <p className="font-bold text-slate-900 text-sm">2. Akhiri Shift Harian</p>
-                  <p className="text-xs text-slate-500">Input penjualan produk & hitung selisih kas (Akses Terbuka)</p>
+                  <p className="text-xs text-slate-500">Input penjualan produk, sisa cup & uang akhir (Akses Terbuka)</p>
                 </div>
               </div>
               <ArrowRight className="w-5 h-5 text-indigo-700 group-hover:translate-x-1 transition-transform" />
