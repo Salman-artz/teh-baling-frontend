@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Lock,
   UserX,
+  CheckCircle2,
 } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
@@ -33,12 +34,25 @@ interface AssignmentData {
   status: string;
 }
 
+interface TodayReportData {
+  id: string;
+  boothId: string;
+  boothName?: string;
+  reportDate: string;
+  shiftType: string;
+  cashModal: number;
+  cashFinal?: number | null;
+  status: string;
+  gpsTimeStart?: string | null;
+}
+
 export default function AttendantHomePage() {
   const { user } = useAuthStore();
   const [activeSession, setActiveSession] = useState<ShiftSession>('PAGI');
   const [wibTimeStr, setWibTimeStr] = useState('');
   const [todayDateFormatted, setTodayDateFormatted] = useState('');
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
+  const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
   const [loadingAssignment, setLoadingAssignment] = useState(false);
 
   const fetchTodayAssignment = async () => {
@@ -46,10 +60,14 @@ export default function AttendantHomePage() {
     const todayStr = getWibDateString();
 
     try {
-      const res = await api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`);
-      if (res.success && Array.isArray(res.data)) {
+      const [assignRes, reportRes] = await Promise.all([
+        api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`),
+        api.get<TodayReportData>(`/daily-reports/today?date=${todayStr}`),
+      ]);
+
+      if (assignRes.success && Array.isArray(assignRes.data)) {
         const storedUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('auth_user') || 'null') : null);
-        const myAssignment = res.data.find(
+        const myAssignment = assignRes.data.find(
           (a) =>
             (storedUser?.id && a.userId === storedUser.id) ||
             (storedUser?.email && a.userEmail?.toLowerCase() === storedUser.email.toLowerCase()) ||
@@ -63,8 +81,15 @@ export default function AttendantHomePage() {
       } else {
         setAssignment(null);
       }
+
+      if (reportRes.success && reportRes.data) {
+        setTodayReport(reportRes.data);
+      } else {
+        setTodayReport(null);
+      }
     } catch {
       setAssignment(null);
+      setTodayReport(null);
     } finally {
       setLoadingAssignment(false);
     }
@@ -198,7 +223,11 @@ export default function AttendantHomePage() {
           </div>
 
           <span className="font-bold text-emerald-300 text-xs">
-            {hasAssignment
+            {todayReport?.status === 'OPEN'
+              ? `Modal Kasir: ${formatRupiah(todayReport.cashModal || 50000)} (Aktif)`
+              : todayReport?.status === 'CLOSED'
+              ? `Shift Selesai (Kasir: ${formatRupiah(todayReport.cashFinal || 0)})`
+              : hasAssignment
               ? `Modal Standar: ${formatRupiah(50000)}`
               : 'Status: Off Shift / Belum Ditugaskan'}
           </span>
@@ -254,10 +283,20 @@ export default function AttendantHomePage() {
               <Lock className="w-3 h-3 text-red-600" />
               Shift Terkunci (Tidak Ada Jadwal)
             </span>
+          ) : todayReport?.status === 'OPEN' ? (
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+              Shift Sedang Berjalan (Aktif)
+            </span>
+          ) : todayReport?.status === 'CLOSED' ? (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Shift Ditutup (Selesai)
+            </span>
           ) : canStartShift && !canEndShift ? (
             <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-              Sesi Berjalan
+              Sesi Berjalan (Belum Mulai)
             </span>
           ) : canEndShift ? (
             <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 flex items-center gap-1.5">
@@ -283,8 +322,14 @@ export default function AttendantHomePage() {
                   <PlayCircle className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="font-bold text-slate-900 text-sm">1. Mulai Shift Harian</p>
-                  <p className="text-xs text-slate-500">Input modal kasir & stok cup awal (Akses Terbuka)</p>
+                  <p className="font-bold text-slate-900 text-sm">
+                    {todayReport?.status === 'OPEN' ? '1. Edit Modal / Stok Awal (Shift Aktif)' : '1. Mulai Shift Harian'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {todayReport?.status === 'OPEN'
+                      ? `Modal tersimpan: ${formatRupiah(todayReport.cashModal || 50000)} (Klik untuk revisi)`
+                      : 'Input modal kasir & stok cup awal (Akses Terbuka)'}
+                  </p>
                 </div>
               </div>
               <ArrowRight className="w-5 h-5 text-emerald-700 group-hover:translate-x-1 transition-transform" />

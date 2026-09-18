@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
-import { getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
-import { ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
+import { ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -43,6 +43,19 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return R * c;
 }
 
+interface TodayReportData {
+  id: string;
+  boothId: string;
+  boothName?: string;
+  reportDate: string;
+  shiftType: string;
+  cashModal: number;
+  cashFinal?: number | null;
+  status: string;
+  gpsTimeStart?: string | null;
+  stockItems?: { cupTypeId: string; qtyInitial: number }[];
+}
+
 export default function StartShiftPage() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -52,6 +65,7 @@ export default function StartShiftPage() {
   const [cupTypes, setCupTypes] = useState<CupTypeItem[]>([]);
   const [cupStocks, setCupStocks] = useState<Record<string, string>>({});
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
+  const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -62,9 +76,10 @@ export default function StartShiftPage() {
       const todayStr = getWibDateString();
 
       try {
-        const [assignRes, cupRes] = await Promise.all([
+        const [assignRes, cupRes, reportRes] = await Promise.all([
           api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`),
           api.get<CupTypeItem[]>('/cup-types'),
+          api.get<TodayReportData>(`/daily-reports/today?date=${todayStr}`),
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
@@ -79,11 +94,24 @@ export default function StartShiftPage() {
           setAssignment(myAssignment || null);
         }
 
+        const savedStocks: Record<string, string> = {};
+        if (reportRes.success && reportRes.data) {
+          setTodayReport(reportRes.data);
+          if (reportRes.data.cashModal !== undefined && reportRes.data.cashModal !== null) {
+            setCashModal(String(reportRes.data.cashModal));
+          }
+          if (Array.isArray(reportRes.data.stockItems)) {
+            reportRes.data.stockItems.forEach((s) => {
+              savedStocks[s.cupTypeId] = String(s.qtyInitial);
+            });
+          }
+        }
+
         if (cupRes.success && Array.isArray(cupRes.data)) {
           setCupTypes(cupRes.data);
           const initialStocks: Record<string, string> = {};
           cupRes.data.forEach((c) => {
-            initialStocks[c.id] = '50';
+            initialStocks[c.id] = savedStocks[c.id] !== undefined ? savedStocks[c.id] : '50';
           });
           setCupStocks(initialStocks);
         }
@@ -134,8 +162,13 @@ export default function StartShiftPage() {
       return;
     }
 
-    if (position && currentDistance !== null && currentDistance > 200) {
-      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignment?.boothName || 'booth'}. Silakan mendekat ke lokasi booth.`);
+    if (!position || position.latitude == null || position.longitude == null) {
+      setError('Akses Ditolak: Anda wajib menekan tombol "Deteksi Lokasi Sekarang" untuk memverifikasi lokasi booth sebelum memulai shift.');
+      return;
+    }
+
+    if (currentDistance !== null && currentDistance > 200) {
+      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignment?.boothName || 'booth'}. Anda tidak dapat memulai shift di luar radius.`);
       return;
     }
 
@@ -259,6 +292,18 @@ export default function StartShiftPage() {
         <p className="mt-1 text-xs text-emerald-100">{assignment?.boothName || 'Booth Teh Baling'}</p>
       </div>
 
+      {todayReport?.status === 'OPEN' && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-xs text-emerald-950 space-y-1 shadow-xs">
+          <div className="flex items-center gap-2 font-bold text-sm text-emerald-900">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            Shift Sedang Berjalan & Data Tersimpan
+          </div>
+          <p className="text-emerald-800 leading-relaxed">
+            Data modal kasir <strong>({formatRupiah(parseInt(cashModal, 10) || 0)})</strong> dan stok cup awal tersimpan di server. Anda dapat memperbarui jika ada penyesuaian modal/stok, atau kembali ke beranda untuk melakukan transaksi.
+          </p>
+        </div>
+      )}
+
       {error && (
         <div data-testid="start-shift-error" className="rounded-lg bg-red-50 p-4 text-sm text-red-600 border border-red-200">
           {error}
@@ -362,11 +407,11 @@ export default function StartShiftPage() {
           <button
             type="submit"
             data-testid="start-shift-submit-btn"
-            disabled={submitting}
-            className="flex-1 rounded-xl bg-emerald-700 py-3.5 text-base font-bold text-white shadow-md hover:bg-emerald-800 disabled:opacity-50 flex items-center justify-center gap-2"
+            disabled={submitting || (currentDistance !== null && currentDistance > 200)}
+            className="flex-1 rounded-xl bg-emerald-700 py-3.5 text-base font-bold text-white shadow-md hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             <Save className="w-5 h-5" />
-            {submitting ? 'Menyimpan...' : 'Simpan & Mulai Shift'}
+            {submitting ? 'Menyimpan...' : currentDistance !== null && currentDistance > 200 ? '⚠️ Lokasi di Luar Radius (Terkunci)' : todayReport?.status === 'OPEN' ? 'Perbarui Data Awal Shift' : 'Simpan & Mulai Shift'}
           </button>
         </div>
       </form>

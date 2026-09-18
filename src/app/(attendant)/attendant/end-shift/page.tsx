@@ -158,8 +158,13 @@ export default function EndShiftPage() {
       return;
     }
 
-    if (position && currentDistance !== null && currentDistance > 200) {
-      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignment?.boothName || 'booth'}. Silakan mendekat ke lokasi booth.`);
+    if (!position || position.latitude == null || position.longitude == null) {
+      setError('Akses Ditolak: Anda wajib menekan tombol "Deteksi Lokasi Sekarang" untuk memverifikasi lokasi booth sebelum menutup shift.');
+      return;
+    }
+
+    if (currentDistance !== null && currentDistance > 200) {
+      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignment?.boothName || 'booth'}. Anda tidak dapat menutup shift di luar radius.`);
       return;
     }
 
@@ -189,7 +194,7 @@ export default function EndShiftPage() {
         setError(res.error?.message || 'Gagal menutup shift.');
       }
     } catch {
-      router.push('/attendant');
+      setError('Terjadi kesalahan jaringan atau server saat menutup shift.');
     } finally {
       setSubmitting(false);
     }
@@ -461,11 +466,11 @@ export default function EndShiftPage() {
           <button
             type="submit"
             data-testid="end-shift-submit-btn"
-            disabled={submitting}
-            className="flex-1 rounded-xl bg-indigo-800 py-3.5 text-base font-bold text-white shadow-md hover:bg-indigo-900 disabled:opacity-50 flex items-center justify-center gap-2"
+            disabled={submitting || (currentDistance !== null && currentDistance > 200)}
+            className="flex-1 rounded-xl bg-indigo-800 py-3.5 text-base font-bold text-white shadow-md hover:bg-indigo-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             <Save className="w-5 h-5" />
-            {submitting ? 'Menyimpan...' : 'Simpan & Tutup Shift'}
+            {submitting ? 'Menyimpan...' : currentDistance !== null && currentDistance > 200 ? '⚠️ Lokasi di Luar Radius (Terkunci)' : 'Simpan & Tutup Shift'}
           </button>
         </div>
       </form>
