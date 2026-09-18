@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, RefreshCw, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
 interface SeriesItem {
@@ -15,16 +15,18 @@ export default function SeriesPage() {
   const [seriesList, setSeriesList] = useState<SeriesItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSeries = useCallback(async () => {
     setLoading(true);
-    const res = await api.get<SeriesItem[]>('/tea-series');
+    const res = await api.get<SeriesItem[]>('/tea-series?all=true');
     if (res.success && res.data) {
       setSeriesList(res.data);
     }
@@ -39,6 +41,7 @@ export default function SeriesPage() {
     setEditingId(null);
     setName('');
     setDescription('');
+    setIsActive(true);
     setError(null);
     setShowModal(true);
   };
@@ -47,8 +50,26 @@ export default function SeriesPage() {
     setEditingId(item.id);
     setName(item.name);
     setDescription(item.description || '');
+    setIsActive(item.isActive !== false);
     setError(null);
     setShowModal(true);
+  };
+
+  const handleToggleStatus = async (item: SeriesItem) => {
+    const newStatus = item.isActive === false ? true : false;
+    setTogglingId(item.id);
+    const res = await api.patch(`/tea-series/${item.id}`, {
+      isActive: newStatus,
+    });
+    setTogglingId(null);
+
+    if (res.success) {
+      setSeriesList((prev) =>
+        prev.map((s) => (s.id === item.id ? { ...s, isActive: newStatus } : s))
+      );
+    } else {
+      alert(res.error?.message || 'Gagal mengubah status aktif series teh');
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -76,6 +97,7 @@ export default function SeriesPage() {
       res = await api.patch(`/tea-series/${editingId}`, {
         name: name.trim(),
         description: description.trim() || undefined,
+        isActive,
       });
     } else {
       res = await api.post('/tea-series', {
@@ -89,6 +111,7 @@ export default function SeriesPage() {
     if (res.success) {
       setName('');
       setDescription('');
+      setIsActive(true);
       setEditingId(null);
       setShowModal(false);
       await fetchSeries();
@@ -102,7 +125,7 @@ export default function SeriesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Katalog Series Teh</h1>
-          <p className="text-sm text-slate-500">Kelola kelompok/kategori rasa teh minuman langsung dari database</p>
+          <p className="text-sm text-slate-500">Kelola kelompok/kategori rasa teh minuman dan status aktif/non-aktif</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -162,6 +185,23 @@ export default function SeriesPage() {
               />
             </div>
 
+            {editingId && (
+              <div className="pt-1">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Status Aktif</span>
+                    <p className="text-xs text-slate-500">Non-aktifkan jika series ini sedang tidak dijual di outlet.</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -187,7 +227,7 @@ export default function SeriesPage() {
       <div className="w-full max-w-full space-y-2">
         <div className="w-full max-w-full rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="w-full max-w-full overflow-x-auto block">
-            <table data-testid="series-table" className="w-full min-w-[600px] text-left text-sm text-slate-600">
+            <table data-testid="series-table" className="w-full min-w-[650px] text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-6 py-3 whitespace-nowrap">Nama Series</th>
@@ -213,37 +253,62 @@ export default function SeriesPage() {
                     </td>
                   </tr>
                 ) : (
-                  seriesList.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">{s.name}</td>
-                      <td className="px-6 py-4 min-w-[200px]">{s.description || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                          Aktif
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                  seriesList.map((s) => {
+                    const active = s.isActive !== false;
+                    return (
+                      <tr key={s.id} className={`hover:bg-slate-50 transition ${!active ? 'bg-slate-50/60 opacity-75' : ''}`}>
+                        <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">
+                          {s.name}
+                        </td>
+                        <td className="px-6 py-4 min-w-[200px]">{s.description || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <button
-                            data-testid={`edit-series-btn-${s.id}`}
-                            onClick={() => handleOpenEdit(s)}
-                            className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                            type="button"
+                            onClick={() => handleToggleStatus(s)}
+                            disabled={togglingId === s.id}
+                            title={active ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition border ${
+                              active
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                            }`}
                           >
-                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                            Edit
+                            {active ? (
+                              <>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>Aktif</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-3.5 w-3.5 text-slate-400" />
+                                <span>Non-Aktif</span>
+                              </>
+                            )}
                           </button>
-                          <button
-                            data-testid={`delete-series-btn-${s.id}`}
-                            onClick={() => handleDelete(s.id)}
-                            className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              data-testid={`edit-series-btn-${s.id}`}
+                              onClick={() => handleOpenEdit(s)}
+                              className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                              Edit
+                            </button>
+                            <button
+                              data-testid={`delete-series-btn-${s.id}`}
+                              onClick={() => handleDelete(s.id)}
+                              className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                              Hapus
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

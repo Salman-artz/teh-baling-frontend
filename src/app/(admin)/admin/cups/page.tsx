@@ -2,18 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { formatRupiah } from '@/lib/utils';
-import { Pencil, Trash2, Settings, Plus, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, Settings, Plus, Check, X, RefreshCw, AlertCircle, Package } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
 interface CupTypeItem {
   id: string;
   name: string;
   price?: number;
+  isActive?: boolean;
 }
 
 interface SeriesOption {
   id: string;
   name: string;
+  isActive?: boolean;
 }
 
 interface CupPriceConfig {
@@ -35,15 +37,16 @@ export default function CupsPage() {
   const [seriesOptions, setSeriesOptions] = useState<SeriesOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [submittingCup, setSubmittingCup] = useState(false);
+  const [togglingCupId, setTogglingCupId] = useState<string | null>(null);
 
   // Aturan Harga & Ketersediaan Cup per Series Teh (LocalStorage / State)
   const [rules, setRules] = useState<SeriesCupRule[]>([]);
 
-  // Modal State untuk Master Ukuran Cup (Tambah & Edit)
+  // Modal State untuk Master Ukuran Cup (Tambah & Edit - Murni Nama Cup)
   const [showCupModal, setShowCupModal] = useState(false);
   const [editingCupId, setEditingCupId] = useState<string | null>(null);
   const [cupNameInput, setCupNameInput] = useState('');
-  const [cupPriceInput, setCupPriceInput] = useState('10000');
+  const [cupIsActive, setCupIsActive] = useState(true);
   const [cupError, setCupError] = useState<string | null>(null);
 
   // Modal State untuk Aturan Harga Cup per Series Teh
@@ -56,8 +59,8 @@ export default function CupsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [cupRes, seriesRes] = await Promise.all([
-      api.get<CupTypeItem[]>('/cup-types'),
-      api.get<SeriesOption[]>('/tea-series'),
+      api.get<CupTypeItem[]>('/cup-types?all=true'),
+      api.get<SeriesOption[]>('/tea-series?all=true'),
     ]);
 
     if (cupRes.success && cupRes.data) {
@@ -94,12 +97,18 @@ export default function CupsPage() {
     }
 
     if (seriesOptions.length > 0 && cupList.length > 0 && rules.length === 0) {
-      // Initialize default rules from series & cup prices
+      // Initialize default rules per series
       const initialRules: SeriesCupRule[] = seriesOptions.map((s, idx) => {
         const cupPrices: Record<string, CupPriceConfig> = {};
         cupList.forEach((c) => {
-          const basePrice = c.price || 10000;
-          cupPrices[c.id] = { enabled: true, price: basePrice + idx * 2000 };
+          let defaultPrice = 10000;
+          const cName = c.name.toLowerCase();
+          if (cName.includes('kecil') || cName.includes('reguler')) defaultPrice = 5000;
+          else if (cName.includes('medium') || cName.includes('sedang')) defaultPrice = 8000;
+          else if (cName.includes('big') || cName.includes('besar')) defaultPrice = 10000;
+          else if (cName.includes('jumbo')) defaultPrice = 12000;
+
+          cupPrices[c.id] = { enabled: true, price: defaultPrice + idx * 2000 };
         });
         return {
           id: `rule_${s.id}`,
@@ -122,12 +131,12 @@ export default function CupsPage() {
   };
 
   // ---------------------------------------------------------------------------
-  // Handlers untuk Master Ukuran Cup (Tambah & Edit)
+  // Handlers untuk Master Ukuran Cup (Murni Nama Cup Tanpa Harga)
   // ---------------------------------------------------------------------------
   const handleOpenAddCup = () => {
     setEditingCupId(null);
     setCupNameInput('');
-    setCupPriceInput('10000');
+    setCupIsActive(true);
     setCupError(null);
     setShowCupModal(true);
   };
@@ -135,21 +144,32 @@ export default function CupsPage() {
   const handleOpenEditCup = (cup: CupTypeItem) => {
     setEditingCupId(cup.id);
     setCupNameInput(cup.name);
-    setCupPriceInput(String(cup.price || 10000));
+    setCupIsActive(cup.isActive !== false);
     setCupError(null);
     setShowCupModal(true);
+  };
+
+  const handleToggleCupStatus = async (cup: CupTypeItem) => {
+    const newStatus = cup.isActive === false ? true : false;
+    setTogglingCupId(cup.id);
+    const res = await api.patch(`/cup-types/${cup.id}`, {
+      isActive: newStatus,
+    });
+    setTogglingCupId(null);
+
+    if (res.success) {
+      setCupList((prev) =>
+        prev.map((c) => (c.id === cup.id ? { ...c, isActive: newStatus } : c))
+      );
+    } else {
+      alert(res.error?.message || 'Gagal mengubah status aktif ukuran cup');
+    }
   };
 
   const handleSaveCup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cupNameInput.trim()) {
       setCupError('Nama ukuran cup wajib diisi');
-      return;
-    }
-
-    const priceNum = parseInt(cupPriceInput, 10);
-    if (isNaN(priceNum) || priceNum < 0) {
-      setCupError('Harga dasar cup harus bernilai positif');
       return;
     }
 
@@ -160,13 +180,18 @@ export default function CupsPage() {
       // Edit Cup (PATCH)
       const res = await api.patch<CupTypeItem>(`/cup-types/${editingCupId}`, {
         name: cupNameInput.trim(),
-        price: priceNum,
+        price: 0,
+        isActive: cupIsActive,
       });
       setSubmittingCup(false);
 
       if (res.success && res.data) {
         setCupList((prev) =>
-          prev.map((c) => (c.id === editingCupId ? { ...c, name: cupNameInput.trim(), price: priceNum } : c))
+          prev.map((c) =>
+            c.id === editingCupId
+              ? { ...c, name: cupNameInput.trim(), isActive: cupIsActive }
+              : c
+          )
         );
         setShowCupModal(false);
       } else {
@@ -176,7 +201,7 @@ export default function CupsPage() {
       // Tambah Cup Baru (POST)
       const res = await api.post<CupTypeItem>('/cup-types', {
         name: cupNameInput.trim(),
-        price: priceNum,
+        price: 0,
       });
 
       setSubmittingCup(false);
@@ -185,17 +210,18 @@ export default function CupsPage() {
         const newCup = res.data;
         setCupList((prev) => [...prev, newCup]);
 
-        // Tambah default price config ke seluruh rules
+        // Tambah config ke seluruh rules
         const updatedRules = rules.map((r) => ({
           ...r,
           cupPrices: {
             ...r.cupPrices,
-            [newCup.id]: { enabled: true, price: priceNum },
+            [newCup.id]: { enabled: true, price: 10000 },
           },
         }));
         savePersistedRules(updatedRules);
 
         setCupNameInput('');
+        setCupIsActive(true);
         setShowCupModal(false);
       } else {
         setCupError(res.error?.message || 'Gagal menyimpan ukuran cup');
@@ -232,7 +258,14 @@ export default function CupsPage() {
 
     const initialConfig: Record<string, CupPriceConfig> = {};
     cupList.forEach((c) => {
-      initialConfig[c.id] = { enabled: true, price: c.price || 10000 };
+      let defaultP = 10000;
+      const cName = c.name.toLowerCase();
+      if (cName.includes('kecil') || cName.includes('reguler')) defaultP = 5000;
+      else if (cName.includes('medium') || cName.includes('sedang')) defaultP = 8000;
+      else if (cName.includes('big') || cName.includes('besar')) defaultP = 10000;
+      else if (cName.includes('jumbo')) defaultP = 12000;
+
+      initialConfig[c.id] = { enabled: true, price: defaultP };
     });
     setModalCupPrices(initialConfig);
     setRuleError(null);
@@ -248,7 +281,14 @@ export default function CupsPage() {
       if (rule.cupPrices[c.id]) {
         updatedConfig[c.id] = { ...rule.cupPrices[c.id] };
       } else {
-        updatedConfig[c.id] = { enabled: false, price: c.price || 10000 };
+        let defaultP = 10000;
+        const cName = c.name.toLowerCase();
+        if (cName.includes('kecil') || cName.includes('reguler')) defaultP = 5000;
+        else if (cName.includes('medium') || cName.includes('sedang')) defaultP = 8000;
+        else if (cName.includes('big') || cName.includes('besar')) defaultP = 10000;
+        else if (cName.includes('jumbo')) defaultP = 12000;
+
+        updatedConfig[c.id] = { enabled: false, price: defaultP };
       }
     });
     setModalCupPrices(updatedConfig);
@@ -335,7 +375,7 @@ export default function CupsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Manajemen Ukuran Cup & Penetapan Harga</h1>
           <p className="text-sm text-slate-500">
-            Kelola master ukuran cup dan tetapkan harga spesifik per kategori series teh langsung ke database
+            Kelola master ukuran cup dan tentukan harga spesifik per kategori series teh
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -350,19 +390,20 @@ export default function CupsPage() {
           <button
             data-testid="add-cup-btn"
             onClick={handleOpenAddCup}
-            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition"
+            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 transition flex items-center gap-1.5"
           >
-            + Tambah Master Ukuran Cup
+            <Plus className="w-4 h-4" />
+            Tambah Ukuran Cup
           </button>
         </div>
       </div>
 
-      {/* Modal Tambah / Edit Master Cup */}
+      {/* Modal Tambah / Edit Master Cup (Murni Nama Cup Tanpa Input Harga) */}
       {showCupModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <form onSubmit={handleSaveCup} className="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-xl">
             <h2 className="text-lg font-bold text-slate-900">
-              {editingCupId ? 'Edit Master Ukuran Cup' : 'Tambah Master Ukuran Cup Baru'}
+              {editingCupId ? 'Edit Nama Ukuran Cup' : 'Tambah Ukuran Cup Baru'}
             </h2>
 
             {cupError && (
@@ -383,19 +424,27 @@ export default function CupsPage() {
                 placeholder="misal: Cup Jumbo (1 Liter)"
                 required
               />
+              <p className="mt-1 text-[11px] text-slate-500">
+                Harga jual untuk cup ini diatur secara fleksibel pada tabel Matriks Harga per Series di bawah.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Harga Standar Default (Rp) *</label>
-              <input
-                type="number"
-                value={cupPriceInput}
-                onChange={(e) => setCupPriceInput(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-bold"
-                placeholder="10000"
-                required
-              />
-            </div>
+            {editingCupId && (
+              <div className="pt-1">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={cupIsActive}
+                    onChange={(e) => setCupIsActive(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Status Aktif Ukuran Cup</span>
+                    <p className="text-xs text-slate-500">Non-aktifkan jika ukuran cup ini sementara tidak digunakan di outlet.</p>
+                  </div>
+                </label>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <button
@@ -412,7 +461,7 @@ export default function CupsPage() {
                 data-testid="cup-save-btn"
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
               >
-                {submittingCup ? 'Menyimpan...' : 'Simpan'}
+                {submittingCup ? 'Menyimpan...' : editingCupId ? 'Update' : 'Simpan'}
               </button>
             </div>
           </form>
@@ -443,7 +492,7 @@ export default function CupsPage() {
               >
                 {seriesOptions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {s.name} {s.isActive === false ? '(Non-Aktif)' : ''}
                   </option>
                 ))}
               </select>
@@ -451,7 +500,7 @@ export default function CupsPage() {
 
             <div className="space-y-3">
               <label className="block text-sm font-semibold text-slate-700">
-                Ketersediaan Cup & Harga Jual (IDR):
+                Ketersediaan Cup & Harga Jual per Series (IDR):
               </label>
 
               <div className="space-y-3 max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50/50">
@@ -459,7 +508,7 @@ export default function CupsPage() {
                   <p className="text-xs text-slate-500 text-center py-4">Belum ada master ukuran cup.</p>
                 ) : (
                   cupList.map((cup) => {
-                    const config = modalCupPrices[cup.id] || { enabled: false, price: cup.price || 10000 };
+                    const config = modalCupPrices[cup.id] || { enabled: false, price: 10000 };
                     return (
                       <div
                         key={cup.id}
@@ -474,7 +523,7 @@ export default function CupsPage() {
                             onChange={(e) => handleToggleCupPrice(cup.id, e.target.checked)}
                             className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
-                          <span>{cup.name}</span>
+                          <span>{cup.name} {cup.isActive === false ? '(Non-Aktif)' : ''}</span>
                         </label>
 
                         {config.enabled ? (
@@ -485,7 +534,7 @@ export default function CupsPage() {
                               value={config.price || ''}
                               onChange={(e) => handlePriceChange(cup.id, e.target.value)}
                               className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none text-right"
-                              placeholder="12000"
+                              placeholder="10000"
                             />
                           </div>
                         ) : (
@@ -517,9 +566,18 @@ export default function CupsPage() {
         </div>
       )}
 
-      {/* SECTION 1: Master Ukuran Cup List */}
+      {/* SECTION 1: Master Ukuran Cup List (Tanpa Harga) */}
       <div className="space-y-3">
-        <h2 className="text-lg font-bold text-slate-900">Varian Master Ukuran Cup</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-emerald-700" />
+            <h2 className="text-lg font-bold text-slate-900">Varian Master Ukuran Cup</h2>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            {cupList.length} Ukuran Terdaftar
+          </span>
+        </div>
+
         {loading && cupList.length === 0 ? (
           <div className="flex items-center justify-center gap-2 p-8 bg-white border border-slate-200 rounded-xl">
             <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
@@ -527,34 +585,62 @@ export default function CupsPage() {
           </div>
         ) : cupList.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500 bg-white border border-slate-200 rounded-xl">
-            Belum ada varian ukuran cup di database. Klik tombol &quot;+ Tambah Master Ukuran Cup&quot; di atas.
+            Belum ada varian ukuran cup di database. Klik tombol &quot;+ Tambah Ukuran Cup&quot; di atas.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-            {cupList.map((cup) => (
-              <div key={cup.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-slate-900 text-sm">{cup.name}</p>
-                  <p className="text-xs font-semibold text-emerald-700">{formatRupiah(cup.price || 10000)}</p>
+            {cupList.map((cup) => {
+              const active = cup.isActive !== false;
+              return (
+                <div
+                  key={cup.id}
+                  className={`rounded-xl border bg-white p-4 shadow-sm flex flex-col justify-between gap-3 transition ${
+                    active ? 'border-slate-200 hover:border-slate-300' : 'border-slate-200 bg-slate-50/70 opacity-80'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">{cup.name}</p>
+                      <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-[120px]">
+                        ID: {cup.id.slice(0, 8)}...
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCupStatus(cup)}
+                      disabled={togglingCupId === cup.id}
+                      title={active ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold transition border ${
+                        active
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                          : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      {active ? 'Aktif' : 'Non-Aktif'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => handleOpenEditCup(cup)}
+                      className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 hover:text-emerald-700 transition"
+                      title="Edit Nama & Status Ukuran Cup"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCup(cup.id)}
+                      className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 transition"
+                      title="Hapus Ukuran Cup"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Hapus</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleOpenEditCup(cup)}
-                    className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 hover:text-emerald-700"
-                    title="Edit Ukuran Cup"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCup(cup.id)}
-                    className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50"
-                    title="Hapus Ukuran Cup"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -568,7 +654,7 @@ export default function CupsPage() {
               Matriks Harga Cup per Series Teh (Dynamic Series Pricing)
             </h2>
             <p className="text-xs text-slate-500">
-              Setiap kategori series teh memiliki ketersediaan ukuran cup dan nominal harga jual spesifik
+              Harga jual dan ketersediaan cup ditentukan secara spesifik untuk setiap kategori series teh
             </p>
           </div>
           <button

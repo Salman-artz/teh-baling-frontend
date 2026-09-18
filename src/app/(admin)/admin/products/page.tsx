@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, RefreshCw, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
 interface ProductItem {
@@ -23,6 +23,7 @@ export default function ProductsPage() {
   const [seriesOptions, setSeriesOptions] = useState<SeriesOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [selectedSeries, setSelectedSeries] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
@@ -30,13 +31,14 @@ export default function ProductsPage() {
   const [name, setName] = useState('');
   const [seriesId, setSeriesId] = useState('');
   const [description, setDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [prodRes, seriesRes] = await Promise.all([
-      api.get<ProductItem[]>('/tea-products'),
-      api.get<SeriesOption[]>('/tea-series'),
+      api.get<ProductItem[]>('/tea-products?all=true'),
+      api.get<SeriesOption[]>('/tea-series?all=true'),
     ]);
 
     if (prodRes.success && prodRes.data) {
@@ -68,6 +70,7 @@ export default function ProductsPage() {
       setSeriesId('');
     }
     setDescription('');
+    setIsActive(true);
     setError(null);
     setShowModal(true);
   };
@@ -77,8 +80,26 @@ export default function ProductsPage() {
     setName(item.name);
     setSeriesId(item.seriesId || (seriesOptions[0]?.id || ''));
     setDescription(item.description || '');
+    setIsActive(item.isActive !== false);
     setError(null);
     setShowModal(true);
+  };
+
+  const handleToggleStatus = async (item: ProductItem) => {
+    const newStatus = item.isActive === false ? true : false;
+    setTogglingId(item.id);
+    const res = await api.patch(`/tea-products/${item.id}`, {
+      isActive: newStatus,
+    });
+    setTogglingId(null);
+
+    if (res.success) {
+      setProductList((prev) =>
+        prev.map((p) => (p.id === item.id ? { ...p, isActive: newStatus } : p))
+      );
+    } else {
+      alert(res.error?.message || 'Gagal mengubah status aktif produk');
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -111,6 +132,7 @@ export default function ProductsPage() {
         name: name.trim(),
         seriesId,
         description: description.trim() || undefined,
+        isActive,
       });
     } else {
       res = await api.post('/tea-products', {
@@ -125,6 +147,7 @@ export default function ProductsPage() {
     if (res.success) {
       setName('');
       setDescription('');
+      setIsActive(true);
       setEditingId(null);
       setShowModal(false);
       await fetchData();
@@ -138,7 +161,7 @@ export default function ProductsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Katalog Produk Teh</h1>
-          <p className="text-sm text-slate-500">Kelola daftar produk minuman Teh Baling langsung dari database</p>
+          <p className="text-sm text-slate-500">Kelola daftar produk minuman Teh Baling dan status aktif/non-aktif</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -238,6 +261,23 @@ export default function ProductsPage() {
               />
             </div>
 
+            {editingId && (
+              <div className="pt-1">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-slate-800">Status Aktif</span>
+                    <p className="text-xs text-slate-500">Non-aktifkan jika menu produk ini sedang kosong / tidak dijual.</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -291,38 +331,61 @@ export default function ProductsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredProducts.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">{p.name}</td>
-                      <td className="px-6 py-4 font-medium text-emerald-700 whitespace-nowrap">{p.seriesName || '-'}</td>
-                      <td className="px-6 py-4 min-w-[200px]">{p.description || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                          Aktif
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                  filteredProducts.map((p) => {
+                    const active = p.isActive !== false;
+                    return (
+                      <tr key={p.id} className={`hover:bg-slate-50 transition ${!active ? 'bg-slate-50/60 opacity-75' : ''}`}>
+                        <td className="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap">{p.name}</td>
+                        <td className="px-6 py-4 font-medium text-emerald-700 whitespace-nowrap">{p.seriesName || '-'}</td>
+                        <td className="px-6 py-4 min-w-[200px]">{p.description || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <button
-                            data-testid={`edit-product-btn-${p.id}`}
-                            onClick={() => handleOpenEdit(p)}
-                            className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                            type="button"
+                            onClick={() => handleToggleStatus(p)}
+                            disabled={togglingId === p.id}
+                            title={active ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition border ${
+                              active
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                            }`}
                           >
-                            <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                            Edit
+                            {active ? (
+                              <>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>Aktif</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-3.5 w-3.5 text-slate-400" />
+                                <span>Non-Aktif</span>
+                              </>
+                            )}
                           </button>
-                          <button
-                            data-testid={`delete-product-btn-${p.id}`}
-                            onClick={() => handleDelete(p.id)}
-                            className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              data-testid={`edit-product-btn-${p.id}`}
+                              onClick={() => handleOpenEdit(p)}
+                              className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                              Edit
+                            </button>
+                            <button
+                              data-testid={`delete-product-btn-${p.id}`}
+                              onClick={() => handleDelete(p.id)}
+                              className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                              Hapus
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
