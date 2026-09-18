@@ -192,13 +192,11 @@ export default function EndShiftPage() {
         // Buat daftar kombinasi produk x ukuran cup dengan harga dari matriks mapping produk
         const saleItemsList: ProductCupSaleItem[] = [];
         rawProducts.forEach((p) => {
-          // Cari aturan mapping produk yang cocok
+          // Cari aturan mapping produk yang cocok (HARUS spesifik per produk, bukan series)
           const matchedRule = storedRules.find(
             (r) =>
               (r.productId && r.productId === p.id) ||
-              (r.productName && r.productName.trim().toLowerCase() === p.name.trim().toLowerCase()) ||
-              (p.seriesId && r.seriesId === p.seriesId) ||
-              (p.seriesName && r.seriesName && r.seriesName.trim().toLowerCase() === p.seriesName.trim().toLowerCase())
+              (r.productName && r.productName.trim().toLowerCase() === p.name.trim().toLowerCase())
           );
 
           activeCups.forEach((cup) => {
