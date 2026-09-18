@@ -7,7 +7,7 @@ import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, Package, ShieldCheck } from 'lucide-react';
+import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, Package, ShieldCheck, Coffee } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -29,12 +29,24 @@ interface AssignmentData {
 interface ProductItem {
   id: string;
   name: string;
+  seriesId?: string;
+  seriesName?: string | null;
 }
 
 interface CupTypeItem {
   id: string;
   name: string;
-  price?: number;
+  price: number;
+}
+
+interface ProductCupSaleItem {
+  id: string; // `${productId}-${cupTypeId}`
+  productId: string;
+  productName: string;
+  cupTypeId: string;
+  cupTypeName: string;
+  price: number;
+  qtySold: number;
 }
 
 interface CupStockClosing {
@@ -57,15 +69,7 @@ interface TodayReportData {
   gpsTimeStart?: string | null;
   gpsTimeEnd?: string | null;
   stockItems?: { cupTypeId: string; qtyInitial: number; qtySold?: number }[];
-  saleItems?: { productId: string; cupTypeId?: string; qtySold: number }[];
-}
-
-interface SalesItem {
-  id: string;
-  productId: string;
-  productName: string;
-  price: number;
-  qtySold: number;
+  saleItems?: { productId: string; cupTypeId?: string; qtySold: number; priceSnapshot?: number }[];
 }
 
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -87,7 +91,8 @@ export default function EndShiftPage() {
 
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
   const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
-  const [salesItems, setSalesItems] = useState<SalesItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [salesItems, setSalesItems] = useState<ProductCupSaleItem[]>([]);
   const [cupStocks, setCupStocks] = useState<CupStockClosing[]>([]);
   const [cashModal, setCashModal] = useState<number>(50000);
   const [cashFinal, setCashFinal] = useState('50000');
@@ -138,15 +143,57 @@ export default function EndShiftPage() {
         }
 
         const defaultCupTypes: CupTypeItem[] = [
-          { id: 'c1111111-1111-1111-1111-111111111111', name: 'Cup Kecil (Reguler)' },
-          { id: 'c2222222-2222-2222-2222-222222222222', name: 'Cup Medium (Sedang)' },
-          { id: 'c3333333-3333-3333-3333-333333333333', name: 'Cup Big (Besar)' },
-          { id: 'c4444444-4444-4444-4444-444444444444', name: 'Cup Jumbo (1 Liter)' },
+          { id: 'c1111111-1111-1111-1111-111111111111', name: 'Cup Kecil (Reguler)', price: 5000 },
+          { id: 'c2222222-2222-2222-2222-222222222222', name: 'Cup Medium (Sedang)', price: 8000 },
+          { id: 'c3333333-3333-3333-3333-333333333333', name: 'Cup Big (Besar)', price: 10000 },
+          { id: 'c4444444-4444-4444-4444-444444444444', name: 'Cup Jumbo (1 Liter)', price: 15000 },
         ];
         const rawCups = cupRes.success && Array.isArray(cupRes.data) && cupRes.data.length > 0
           ? cupRes.data
           : defaultCupTypes;
 
+        const defaultProducts: ProductItem[] = [
+          { id: '11111111-1111-1111-1111-111111111101', name: 'Teh Baling Melati Original' },
+          { id: '11111111-1111-1111-1111-111111111102', name: 'Teh Kampul Lemon Segar' },
+          { id: '11111111-1111-1111-1111-111111111103', name: 'Teh Baling Yakult Segar' },
+          { id: '11111111-1111-1111-1111-111111111104', name: 'Teh Baling Lychee Fruity' },
+        ];
+        const rawProducts = prodRes.success && Array.isArray(prodRes.data) && prodRes.data.length > 0
+          ? prodRes.data
+          : defaultProducts;
+        setProducts(rawProducts);
+
+        // Buat daftar kombinasi produk x ukuran cup dengan harga masing-masing
+        const saleItemsList: ProductCupSaleItem[] = [];
+        rawProducts.forEach((p) => {
+          // Jika produk spesial (seperti Yakult/Lychee), sediakan cup Big & Jumbo (atau jika produk biasa, sediakan semua cup)
+          const isSpecialTea = p.name.toLowerCase().includes('yakult') || p.name.toLowerCase().includes('lychee') || p.name.toLowerCase().includes('fruity');
+          const availableCups = isSpecialTea
+            ? rawCups.filter((c) => c.name.toLowerCase().includes('big') || c.name.toLowerCase().includes('jumbo') || c.name.toLowerCase().includes('medium'))
+            : rawCups;
+
+          availableCups.forEach((cup) => {
+            // Kalkulasi harga: harga dasar cup
+            let price = cup.price || 5000;
+            // Penyesuaian harga jika series yakult/buah (+Rp 2.000)
+            if (isSpecialTea && price <= 10000) {
+              price += 2000;
+            }
+
+            saleItemsList.push({
+              id: `${p.id}-${cup.id}`,
+              productId: p.id,
+              productName: p.name,
+              cupTypeId: cup.id,
+              cupTypeName: cup.name,
+              price,
+              qtySold: 0,
+            });
+          });
+        });
+        setSalesItems(saleItemsList);
+
+        // Inisialisasi stok closing cup
         const closings: CupStockClosing[] = rawCups.map((c) => {
           const initial = initialStockMap[c.id] !== undefined ? initialStockMap[c.id] : 50;
           return {
@@ -158,24 +205,6 @@ export default function EndShiftPage() {
         });
         setCupStocks(closings);
 
-        const defaultProducts: ProductItem[] = [
-          { id: '11111111-1111-1111-1111-111111111101', name: 'Teh Baling Melati Original' },
-          { id: '11111111-1111-1111-1111-111111111102', name: 'Teh Kampul Lemon Segar' },
-          { id: '11111111-1111-1111-1111-111111111103', name: 'Teh Baling Yakult Segar' },
-          { id: '11111111-1111-1111-1111-111111111104', name: 'Teh Baling Lychee Fruity' },
-        ];
-        const rawProducts = prodRes.success && Array.isArray(prodRes.data) && prodRes.data.length > 0
-          ? prodRes.data
-          : defaultProducts;
-
-        const items: SalesItem[] = rawProducts.map((p, idx) => ({
-          id: p.id,
-          productId: p.id,
-          productName: p.name,
-          price: 5000 + (idx % 3) * 3000,
-          qtySold: 0,
-        }));
-        setSalesItems(items);
         setCashFinal(String(modalFromReport));
       } finally {
         setLoading(false);
@@ -220,18 +249,23 @@ export default function EndShiftPage() {
   const finalCashNum = parseInt(cashFinal, 10) || 0;
   const variance = finalCashNum - expectedTotalCash;
 
-  // Cup calculations
+  // Cup usage breakdown by cup type
+  const cupsSoldMap: Record<string, number> = {};
+  salesItems.forEach((item) => {
+    cupsSoldMap[item.cupTypeId] = (cupsSoldMap[item.cupTypeId] || 0) + item.qtySold;
+  });
+
   const totalCupsUsed = cupStocks.reduce((sum, c) => {
     const finalVal = parseInt(c.qtyFinal, 10) || 0;
     return sum + Math.max(0, c.qtyInitial - finalVal);
   }, 0);
   const cupVariance = totalCupsUsed - totalProductsSold;
 
-  const handleQtyChange = (id: string, qtyStr: string) => {
+  const handleQtyChange = (itemId: string, qtyStr: string) => {
     const qty = parseInt(qtyStr, 10);
     const validQty = isNaN(qty) ? 0 : Math.max(0, qty);
     setSalesItems((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, qtySold: validQty } : item));
+      const updated = prev.map((item) => (item.id === itemId ? { ...item, qtySold: validQty } : item));
       const newRev = updated.reduce((acc, it) => acc + it.price * it.qtySold, 0);
       setCashFinal(String(cashModal + newRev));
       return updated;
@@ -274,6 +308,14 @@ export default function EndShiftPage() {
 
     setSubmitting(true);
     try {
+      const activeSales = salesItems
+        .filter((s) => s.qtySold > 0)
+        .map((s) => ({
+          productId: s.productId,
+          cupTypeId: s.cupTypeId,
+          qtySold: s.qtySold,
+        }));
+
       const res = await api.post('/daily-reports/end', {
         cashFinal: finalCashNum,
         stockItems: cupStocks.map((c) => {
@@ -285,10 +327,7 @@ export default function EndShiftPage() {
             qtySold: Math.max(0, c.qtyInitial - finalVal),
           };
         }),
-        saleItems: salesItems.map((s) => ({
-          productId: s.productId,
-          qtySold: s.qtySold,
-        })),
+        saleItems: activeSales,
         notes,
         gpsLatitude: position?.latitude ?? null,
         gpsLongitude: position?.longitude ?? null,
@@ -316,7 +355,7 @@ export default function EndShiftPage() {
     );
   }
 
-  // 1. JIKA SHIFT SUDAH DITUTUP (STATUS CLOSED) -> KUNCI TIDAK BISA DIEDIT LAGI
+  // 1. JIKA SHIFT SUDAH DITUTUP (STATUS CLOSED) -> KUNCI TOTAL
   if (todayReport && todayReport.status === 'CLOSED') {
     const recordedModal = todayReport.cashModal || 0;
     const recordedFinal = todayReport.cashFinal || 0;
@@ -396,7 +435,7 @@ export default function EndShiftPage() {
     );
   }
 
-  // 2. JIKA AKSES DILUAR JADWAL ATAU TERKUNCI JAM OPERASIONAL -> LAYAR LOCK PENUH
+  // 2. JIKA AKSES DILUAR JADWAL ATAU TERKUNCI JAM OPERASIONAL -> LAYAR LOCK
   if (!isAccessAllowed) {
     return (
       <div className="space-y-6 pb-24 max-w-lg mx-auto">
@@ -484,42 +523,68 @@ export default function EndShiftPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* 1. Input Penjualan Produk Teh */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h2 className="font-bold text-slate-900 text-sm">1. Input Penjualan Produk Teh</h2>
+        {/* 1. Input Penjualan Produk Teh & Pilihan Ukuran Cup */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <Coffee className="w-4 h-4 text-emerald-600" />
+              <h2 className="font-bold text-slate-900 text-sm">1. Penjualan Produk & Ukuran Cup</h2>
+            </div>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
               {totalProductsSold} Cup Terjual
             </span>
           </div>
 
-          <div className="space-y-2.5">
-            {salesItems.length === 0 ? (
-              <p className="text-xs text-slate-500 py-2">Memuat daftar menu produk dari database...</p>
+          <div className="space-y-4">
+            {products.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2">Memuat daftar menu produk...</p>
             ) : (
-              salesItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-slate-200/80 bg-slate-50/50"
-                >
-                  <div>
-                    <p className="font-semibold text-xs text-slate-900">{item.productName}</p>
-                    <p className="text-[11px] text-slate-500">{formatRupiah(item.price)} / cup</p>
+              products.map((product) => {
+                const productVariants = salesItems.filter((s) => s.productId === product.id);
+                const productSoldTotal = productVariants.reduce((sum, v) => sum + v.qtySold, 0);
+
+                return (
+                  <div
+                    key={product.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-xs text-slate-900">{product.name}</h3>
+                      {productSoldTotal > 0 && (
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                          {productSoldTotal} Cup
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {productVariants.map((variant) => (
+                        <div
+                          key={variant.id}
+                          className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200/90 shadow-2xs"
+                        >
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">{variant.cupTypeName}</p>
+                            <p className="text-[11px] font-bold text-emerald-700">{formatRupiah(variant.price)}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min="0"
+                              value={variant.qtySold === 0 ? '' : variant.qtySold}
+                              onChange={(e) => handleQtyChange(variant.id, e.target.value)}
+                              placeholder="0"
+                              className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
+                            />
+                            <span className="text-xs font-medium text-slate-500">Cup</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      value={item.qtySold === 0 ? '' : item.qtySold}
-                      onChange={(e) => handleQtyChange(item.id, e.target.value)}
-                      placeholder="0"
-                      className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
-                    />
-                    <span className="text-xs font-medium text-slate-500">Cup</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -536,7 +601,7 @@ export default function EndShiftPage() {
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Hitung fisik sisa cup di booth saat ini. Stok awal diambil otomatis dari data buka shift pagi.
+            Hitung sisa fisik cup di laci/booth. Sistem mencocokkan otomatis antara cup terpakai vs menu terjual.
           </p>
 
           <div className="space-y-3">
@@ -546,6 +611,9 @@ export default function EndShiftPage() {
               cupStocks.map((c) => {
                 const finalNum = parseInt(c.qtyFinal, 10) || 0;
                 const used = Math.max(0, c.qtyInitial - finalNum);
+                const soldFromMenu = cupsSoldMap[c.cupTypeId] || 0;
+                const diff = used - soldFromMenu;
+
                 return (
                   <div
                     key={c.cupTypeId}
@@ -554,7 +622,7 @@ export default function EndShiftPage() {
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-xs text-slate-900">{c.cupTypeName}</span>
                       <span className="text-[11px] text-slate-500">
-                        Awal Shift: <strong className="text-slate-800">{c.qtyInitial} pcs</strong>
+                        Awal: <strong className="text-slate-800">{c.qtyInitial}</strong> | Terjual Menu: <strong className="text-emerald-700">{soldFromMenu}</strong>
                       </span>
                     </div>
 
@@ -579,9 +647,20 @@ export default function EndShiftPage() {
 
                       <div className="text-right">
                         <span className="block text-[11px] font-medium text-slate-500">Cup Terpakai</span>
-                        <span className="text-sm font-extrabold text-emerald-700">
-                          {used} <span className="text-xs font-normal text-slate-500">pcs</span>
-                        </span>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-sm font-extrabold text-slate-900">
+                            {used} <span className="text-xs font-normal text-slate-500">pcs</span>
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              diff === 0
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}
+                          >
+                            {diff === 0 ? '✓ Cocok' : `${diff > 0 ? `+${diff}` : diff} cup`}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -648,9 +727,9 @@ export default function EndShiftPage() {
 
             {/* Rekonsiliasi Cup Fisik vs Produk Terjual */}
             <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
-              <span className="text-slate-300">Rekonsiliasi Cup:</span>
+              <span className="text-slate-300">Rekonsiliasi Cup Fisik vs Penjualan:</span>
               <span className={`font-semibold ${cupVariance === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {totalCupsUsed} cup fisik / {totalProductsSold} porsi teh ({cupVariance === 0 ? 'Cocok ✓' : `${cupVariance > 0 ? `+${cupVariance}` : cupVariance} cup selisih`})
+                {totalCupsUsed} cup fisik / {totalProductsSold} porsi ({cupVariance === 0 ? 'Cocok ✓' : `${cupVariance > 0 ? `+${cupVariance}` : cupVariance} cup selisih`})
               </span>
             </div>
           </div>
