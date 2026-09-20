@@ -121,7 +121,7 @@ export default function AttendantHomePage() {
   const startWindowMin = isPagi ? 7.0 : 14.0;
   const startWindowMax = isPagi ? 16.0 : 21.0;
   const endWindowMin = isPagi ? 9.0 : 16.0;
-  const endWindowMax = isPagi ? 18.0 : 23.0;
+  const endWindowMax = isPagi ? 18.0 : 24.0;
 
   const isTimeValidForStart = currentHourDec >= startWindowMin && currentHourDec <= startWindowMax;
   const isTimeValidForEnd = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
@@ -148,7 +148,7 @@ export default function AttendantHomePage() {
   } else if (currentHourDec < endWindowMin) {
     endDisabledReason = `Akses tutup shift dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '16:00'} WIB).`;
   } else if (currentHourDec > endWindowMax) {
-    endDisabledReason = `Waktu tutup shift kasir telah lewat (Toleransi maksimal pukul ${isPagi ? '18:00' : '23:00'} WIB).`;
+    endDisabledReason = `Waktu tutup shift kasir telah lewat (Toleransi maksimal pukul ${isPagi ? '18:00' : '24:00'} WIB).`;
   }
 
 
