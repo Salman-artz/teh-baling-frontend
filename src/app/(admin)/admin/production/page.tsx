@@ -15,6 +15,7 @@ import {
   Truck,
   Store,
   FileSpreadsheet,
+  Droplets,
 } from 'lucide-react';
 
 interface CookingRecord {
@@ -59,6 +60,13 @@ interface BoothOption {
   isActive: boolean;
 }
 
+interface StockSummary {
+  date: string;
+  totalCooked: number;
+  totalDelivered: number;
+  remainingStock: number;
+}
+
 export default function AdminProductionPage() {
   const todayStr = getWibDateString();
   const [activeTab, setActiveTab] = useState<'cooking' | 'delivery'>('cooking');
@@ -73,6 +81,10 @@ export default function AdminProductionPage() {
   const [staffList, setStaffList] = useState<UserOption[]>([]);
   const [booths, setBooths] = useState<BoothOption[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Live stock state
+  const [stockSummary, setStockSummary] = useState<StockSummary | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
 
   // Modal Cooking Form State
   const [showCookingModal, setShowCookingModal] = useState(false);
@@ -113,6 +125,21 @@ export default function AdminProductionPage() {
     }
   }, []);
 
+  const fetchStock = useCallback(async (dateStr?: string) => {
+    setLoadingStock(true);
+    try {
+      const targetDate = dateStr || fromDate || todayStr;
+      const res = await api.get<StockSummary>(`/production-stock?date=${targetDate}`);
+      if (res.success && res.data) {
+        setStockSummary(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingStock(false);
+    }
+  }, [fromDate, todayStr]);
+
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
@@ -139,13 +166,14 @@ export default function AdminProductionPage() {
           setDeliveryRecords([]);
         }
       }
+      fetchStock();
     } catch {
       if (activeTab === 'cooking') setCookingRecords([]);
       else setDeliveryRecords([]);
     } finally {
       setLoading(false);
     }
-  }, [activeTab, fromDate, toDate, searchQuery, filterBoothId]);
+  }, [activeTab, fromDate, toDate, searchQuery, filterBoothId, fetchStock]);
 
   useEffect(() => {
     fetchStaffAndBooths();
@@ -244,6 +272,7 @@ export default function AdminProductionPage() {
       const res = await api.delete(`/production-reports/${id}`);
       if (res.success) {
         setCookingRecords((prev) => prev.filter((r) => r.id !== id));
+        fetchStock();
       } else {
         alert(res.error?.message || 'Gagal menghapus laporan memasak');
       }
@@ -262,6 +291,7 @@ export default function AdminProductionPage() {
     setFormDeliveryLiters('');
     setFormDeliveryNotes('');
     setFormError(null);
+    fetchStock(todayStr);
     setShowDeliveryModal(true);
   };
 
@@ -273,6 +303,7 @@ export default function AdminProductionPage() {
     setFormDeliveryLiters(String(record.liters));
     setFormDeliveryNotes(record.notes && record.notes !== '-' ? record.notes : '');
     setFormError(null);
+    fetchStock(record.date);
     setShowDeliveryModal(true);
   };
 
@@ -340,6 +371,7 @@ export default function AdminProductionPage() {
       const res = await api.delete(`/production-deliveries/${id}`);
       if (res.success) {
         setDeliveryRecords((prev) => prev.filter((r) => r.id !== id));
+        fetchStock();
       } else {
         alert(res.error?.message || 'Gagal menghapus data pengiriman');
       }
@@ -393,7 +425,7 @@ export default function AdminProductionPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Manajemen Produksi & Distribusi Teh</h1>
           <p className="text-sm text-slate-500">
-            Kelola rekap memasak teh di dapur dan distribusi pengiriman teh ke seluruh outlet booth
+            Kelola rekap memasak teh di dapur dan distribusi pengiriman teh ke seluruh outlet booth (Anti Defisit)
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -475,21 +507,36 @@ export default function AdminProductionPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="rounded-xl border border-emerald-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Teh Dikirim ke Booth</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-950">{totalLitersDelivered.toFixed(1)} Liter</p>
-            <p className="mt-1 text-xs text-emerald-700 font-semibold">🚚 Telah tiba di outlet booth</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Teh Dikirim</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-950">{totalLitersDelivered.toFixed(1)} Liter</p>
+            <p className="mt-1 text-xs text-emerald-700 font-semibold">🚚 Telah tiba di booth</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Sesi Pengiriman</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{totalSessionsDelivered} Pengiriman</p>
-            <p className="mt-1 text-xs text-slate-500">Distribusi jerigen ke outlet</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Sesi Kirim</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{totalSessionsDelivered} Kali</p>
+            <p className="mt-1 text-xs text-slate-500">Distribusi jerigen teh</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Rata-rata Per Pengiriman</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{avgLitersDelivered} Liter / Kirim</p>
-            <p className="mt-1 text-xs text-slate-500">Volume jerigen teh rata-rata</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Rata-rata Per Kirim</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{avgLitersDelivered} Liter</p>
+            <p className="mt-1 text-xs text-slate-500">Volume per armada</p>
+          </div>
+          <div className={`rounded-xl border p-5 shadow-sm ${
+            (stockSummary?.remainingStock ?? 0) > 0
+              ? 'bg-emerald-50/70 border-emerald-300'
+              : 'bg-amber-50/70 border-amber-300'
+          }`}>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+              <Droplets className="w-3.5 h-3.5 text-emerald-700" /> Sisa Stok Dapur
+            </p>
+            <p className="mt-2 text-2xl font-black text-emerald-950">
+              {loadingStock ? '...' : `${stockSummary?.remainingStock ?? 0} Liter`}
+            </p>
+            <p className="mt-1 text-[11px] font-semibold text-slate-500">
+              Dimasak: {stockSummary?.totalCooked ?? 0} L | Terkirim: {stockSummary?.totalDelivered ?? 0} L
+            </p>
           </div>
         </div>
       )}
@@ -872,6 +919,21 @@ export default function AdminProductionPage() {
               </button>
             </div>
 
+            {/* Info Stok Dapur Real-time */}
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs space-y-1">
+              <div className="flex items-center justify-between font-bold text-emerald-900">
+                <span className="flex items-center gap-1">
+                  <Droplets className="w-3.5 h-3.5 text-emerald-700" /> Sisa Stok Siap Kirim ({formDeliveryDate})
+                </span>
+                <span className="text-sm font-extrabold text-emerald-950">
+                  {stockSummary?.remainingStock ?? 0} Liter
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-700">
+                Total Dimasak: {stockSummary?.totalCooked ?? 0} L | Sudah Terkirim: {stockSummary?.totalDelivered ?? 0} L
+              </p>
+            </div>
+
             {formError && (
               <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-sm text-red-700 rounded-lg">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -884,7 +946,10 @@ export default function AdminProductionPage() {
               <input
                 type="date"
                 value={formDeliveryDate}
-                onChange={(e) => setFormDeliveryDate(e.target.value)}
+                onChange={(e) => {
+                  setFormDeliveryDate(e.target.value);
+                  fetchStock(e.target.value);
+                }}
                 required
                 className="w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 focus:border-emerald-600 focus:outline-none"
               />

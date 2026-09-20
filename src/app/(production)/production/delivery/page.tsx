@@ -1,15 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
-import { Truck, Clock, Calendar, CheckCircle2, AlertCircle, Save, History, Lock, Store } from 'lucide-react';
+import {
+  Truck,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
+  Save,
+  History,
+  Lock,
+  Store,
+  Flame,
+  Droplets,
+} from 'lucide-react';
 
 interface BoothOption {
   id: string;
   name: string;
   address: string;
   isActive: boolean;
+}
+
+interface StockSummary {
+  date: string;
+  totalCooked: number;
+  totalDelivered: number;
+  remainingStock: number;
 }
 
 export default function ProductionDeliveryPage() {
@@ -24,6 +43,10 @@ export default function ProductionDeliveryPage() {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
   const [isOperatingHours, setIsOperatingHours] = useState(true);
+
+  // Stock tracking state
+  const [stockSummary, setStockSummary] = useState<StockSummary | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
 
   useEffect(() => {
     const updateTime = () => {
@@ -70,6 +93,20 @@ export default function ProductionDeliveryPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const fetchStock = useCallback(async () => {
+    setLoadingStock(true);
+    try {
+      const res = await api.get<StockSummary>('/production-stock');
+      if (res.success && res.data) {
+        setStockSummary(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingStock(false);
+    }
+  }, []);
+
   useEffect(() => {
     async function fetchBooths() {
       setFetchingBooths(true);
@@ -88,11 +125,28 @@ export default function ProductionDeliveryPage() {
       }
     }
     fetchBooths();
-  }, []);
+    fetchStock();
+  }, [fetchStock]);
+
+  const remainingStock = stockSummary?.remainingStock ?? 0;
+  const inputLitersNum = parseFloat(totalLiters) || 0;
+  const isOverStock = inputLitersNum > remainingStock;
 
   const handleQuickAddLiters = (amount: number) => {
     const current = parseFloat(totalLiters) || 0;
-    setTotalLiters(String(current + amount));
+    const target = current + amount;
+    // Jangan melebihi sisa stok jika stok tersedia
+    if (remainingStock > 0 && target > remainingStock) {
+      setTotalLiters(String(remainingStock));
+    } else {
+      setTotalLiters(String(target));
+    }
+  };
+
+  const handleSetMaxStock = () => {
+    if (remainingStock > 0) {
+      setTotalLiters(String(remainingStock));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,6 +170,13 @@ export default function ProductionDeliveryPage() {
       return;
     }
 
+    if (stockSummary && liters > stockSummary.remainingStock) {
+      setError(
+        `Pengiriman tidak boleh defisit! Sisa stok teh di dapur hari ini hanya ${stockSummary.remainingStock} Liter (Dimasak: ${stockSummary.totalCooked} L, Sudah Terkirim: ${stockSummary.totalDelivered} L).`
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await api.post('/production-deliveries', {
@@ -128,6 +189,7 @@ export default function ProductionDeliveryPage() {
         setSuccess(true);
         setTotalLiters('');
         setNotes('');
+        fetchStock(); // Refresh sisa stok
       } else {
         setError(res.error?.message || 'Gagal menyimpan laporan pengiriman teh.');
       }
@@ -160,6 +222,65 @@ export default function ProductionDeliveryPage() {
         <p className="text-xs text-emerald-200">
           Catat volume teh (dalam Liter) yang dikirimkan langsung dari dapur ke outlet booth penjualan
         </p>
+      </div>
+
+      {/* Widget Stok Teh Dapur Hari Ini (Anti Defisit) */}
+      <div className="rounded-2xl border-2 border-emerald-300/80 bg-gradient-to-b from-emerald-50 to-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Droplets className="w-5 h-5 text-emerald-700" />
+            <span className="text-xs font-extrabold uppercase text-emerald-950 tracking-wide">
+              Stok Teh Dapur Hari Ini
+            </span>
+          </div>
+          <span className="text-[11px] font-bold text-emerald-700 font-mono">
+            {currentDate || 'Hari Ini'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200/80">
+            <p className="text-[10px] font-bold uppercase text-amber-800 flex items-center justify-center gap-1">
+              <Flame className="w-3 h-3 text-amber-600" /> Dimasak
+            </p>
+            <p className="text-base font-black text-amber-950 mt-0.5">
+              {loadingStock ? '...' : `${stockSummary?.totalCooked ?? 0} L`}
+            </p>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200">
+            <p className="text-[10px] font-bold uppercase text-slate-600 flex items-center justify-center gap-1">
+              <Truck className="w-3 h-3 text-slate-500" /> Terkirim
+            </p>
+            <p className="text-base font-black text-slate-800 mt-0.5">
+              {loadingStock ? '...' : `${stockSummary?.totalDelivered ?? 0} L`}
+            </p>
+          </div>
+
+          <div
+            className={`p-2.5 rounded-xl border transition ${
+              remainingStock > 0
+                ? 'bg-emerald-100/70 border-emerald-300 text-emerald-950'
+                : 'bg-red-50 border-red-200 text-red-900'
+            }`}
+          >
+            <p className="text-[10px] font-bold uppercase flex items-center justify-center gap-1">
+              <Droplets className="w-3 h-3" /> Sisa Stok
+            </p>
+            <p className="text-base font-black mt-0.5">
+              {loadingStock ? '...' : `${remainingStock} L`}
+            </p>
+          </div>
+        </div>
+
+        {remainingStock <= 0 && (
+          <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] font-semibold text-red-800 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>
+              Stok teh habis! Silakan input laporan memasak teh terlebih dahulu di menu <strong>Masak Teh</strong> sebelum mengirim ke booth.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Real-time Timestamp & Operational Status */}
@@ -251,22 +372,41 @@ export default function ProductionDeliveryPage() {
 
         {/* Input Volume Liter */}
         <div>
-          <label className="block text-sm font-bold text-slate-900">Jumlah Teh Dikirim *</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-bold text-slate-900">Jumlah Teh Dikirim *</label>
+            <span className="text-xs font-bold text-emerald-700">
+              Maks: {remainingStock} Liter
+            </span>
+          </div>
+
           <div className="relative mt-2">
             <input
               type="number"
               step="0.5"
               min="0.1"
+              max={remainingStock > 0 ? remainingStock : undefined}
               inputMode="decimal"
               value={totalLiters}
               onChange={(e) => setTotalLiters(e.target.value)}
               placeholder="misal: 25"
               required
-              disabled={!isOperatingHours || loading}
-              className="block w-full rounded-xl border border-slate-300 p-3.5 pr-16 text-2xl font-black text-emerald-950 focus:border-emerald-600 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
+              disabled={!isOperatingHours || loading || remainingStock <= 0}
+              className={`block w-full rounded-xl border p-3.5 pr-16 text-2xl font-black focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 ${
+                isOverStock
+                  ? 'border-red-500 text-red-700 focus:border-red-600 bg-red-50/50'
+                  : 'border-slate-300 text-emerald-950 focus:border-emerald-600'
+              }`}
             />
             <span className="absolute right-4 top-4 text-sm font-bold text-slate-500">Liter</span>
           </div>
+
+          {/* Over Stock Warning */}
+          {isOverStock && (
+            <p className="text-xs font-bold text-red-600 mt-1.5 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Jumlah melebihi sisa stok ({remainingStock} L). Pengiriman tidak boleh defisit!
+            </p>
+          )}
 
           {/* Quick Preset Buttons */}
           <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
@@ -276,12 +416,22 @@ export default function ProductionDeliveryPage() {
                 key={amt}
                 type="button"
                 onClick={() => handleQuickAddLiters(amt)}
-                disabled={!isOperatingHours || loading}
+                disabled={!isOperatingHours || loading || remainingStock <= 0}
                 className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold hover:bg-emerald-100 transition disabled:opacity-50"
               >
                 +{amt} L
               </button>
             ))}
+            {remainingStock > 0 && (
+              <button
+                type="button"
+                onClick={handleSetMaxStock}
+                disabled={!isOperatingHours || loading}
+                className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 transition"
+              >
+                Semua Sisa ({remainingStock} L)
+              </button>
+            )}
             {totalLiters && (
               <button
                 type="button"
@@ -292,9 +442,6 @@ export default function ProductionDeliveryPage() {
               </button>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Jumlah liter ini terpisah dari total yang dimasak di dapur sesuai kebutuhan aktual booth
-          </p>
         </div>
 
         {/* Catatan Pengiriman */}
@@ -305,7 +452,7 @@ export default function ProductionDeliveryPage() {
             onChange={(e) => setNotes(e.target.value)}
             placeholder="misal: Jerigen 25L x 1, dikirim via motor oleh Mas Joko..."
             rows={3}
-            disabled={!isOperatingHours || loading}
+            disabled={!isOperatingHours || loading || remainingStock <= 0}
             className="mt-1.5 block w-full rounded-xl border border-slate-300 p-3 text-sm text-slate-900 focus:border-emerald-600 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
           />
         </div>
@@ -313,13 +460,23 @@ export default function ProductionDeliveryPage() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={!isOperatingHours || loading}
+          disabled={!isOperatingHours || loading || remainingStock <= 0 || isOverStock}
           className="w-full rounded-xl bg-emerald-800 py-3.5 text-base font-bold text-white shadow-md hover:bg-emerald-900 disabled:opacity-50 disabled:bg-slate-400 transition flex items-center justify-center gap-2"
         >
           {!isOperatingHours ? (
             <>
               <Lock className="w-5 h-5" />
               <span>Akses Ditutup (05:00 - 21:00 WIB)</span>
+            </>
+          ) : remainingStock <= 0 ? (
+            <>
+              <AlertCircle className="w-5 h-5" />
+              <span>Stok Teh Dapur Kosong</span>
+            </>
+          ) : isOverStock ? (
+            <>
+              <AlertCircle className="w-5 h-5" />
+              <span>Pengiriman Melebihi Stok</span>
             </>
           ) : (
             <>
