@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { api, downloadFile } from '@/lib/api-client';
-import { RefreshCw } from 'lucide-react';
+import { getWibDateString } from '@/lib/utils';
+import { RefreshCw, Calendar } from 'lucide-react';
 
 interface ProductionRecord {
   id: string;
@@ -15,8 +16,9 @@ interface ProductionRecord {
 }
 
 export default function AdminProductionPage() {
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const todayStr = getWibDateString();
+  const [fromDate, setFromDate] = useState(todayStr);
+  const [toDate, setToDate] = useState(todayStr);
   const [searchQuery, setSearchQuery] = useState('');
   const [records, setRecords] = useState<ProductionRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,6 +46,16 @@ export default function AdminProductionPage() {
     }
     fetchReports();
   }, [fromDate, toDate, searchQuery]);
+
+  const handleSetToday = () => {
+    setFromDate(todayStr);
+    setToDate(todayStr);
+  };
+
+  const handleSetAll = () => {
+    setFromDate('');
+    setToDate('');
+  };
 
   const totalLiters = records.reduce((acc, r) => acc + r.liters, 0);
   const totalSessions = records.length;
@@ -108,34 +120,67 @@ export default function AdminProductionPage() {
       </div>
 
       {/* Filter Tanggal & Pencarian */}
-      <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-3">
-        <div>
-          <label className="block text-xs font-semibold uppercase text-slate-500">Dari Tanggal</label>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-          />
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span className="font-bold text-slate-700 text-sm flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-emerald-700" />
+            Filter Data Laporan
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleSetToday}
+              className={`px-3 py-1 rounded-lg font-semibold text-xs transition ${
+                fromDate === todayStr && toDate === todayStr
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={handleSetAll}
+              className={`px-3 py-1 rounded-lg font-semibold text-xs transition ${
+                !fromDate && !toDate
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Semua Tanggal
+            </button>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase text-slate-500">Sampai Tanggal</label>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase text-slate-500">Cari Catatan / Staf</label>
-          <input
-            type="text"
-            placeholder="Ketik kata kunci..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-          />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Dari Tanggal</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Sampai Tanggal</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Cari Catatan / Staf</label>
+            <input
+              type="text"
+              placeholder="Ketik kata kunci..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
         </div>
       </div>
 
