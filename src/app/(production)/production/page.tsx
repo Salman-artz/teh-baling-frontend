@@ -18,10 +18,24 @@ export default function ProductionPage() {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setCurrentDate(now.toISOString().split('T')[0]);
-      setCurrentTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
-
       try {
+        const dateParts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Jakarta',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(now);
+        setCurrentDate(dateParts);
+
+        const timeString = new Intl.DateTimeFormat('id-ID', {
+          timeZone: 'Asia/Jakarta',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }).format(now) + ' WIB';
+        setCurrentTime(timeString);
+
         const parts = new Intl.DateTimeFormat('en-US', {
           timeZone: 'Asia/Jakarta',
           hour: 'numeric',
