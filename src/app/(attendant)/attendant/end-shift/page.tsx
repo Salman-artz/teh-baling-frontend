@@ -7,7 +7,7 @@ import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, Lock, AlertTriangle, ArrowRight, RefreshCw, Package, ShieldCheck, Coffee } from 'lucide-react';
+import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, RefreshCw, Package, ShieldCheck, Coffee, Filter } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -26,6 +26,12 @@ interface AssignmentData {
   status: string;
 }
 
+interface SeriesItem {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
 interface ProductItem {
   id: string;
   name: string;
@@ -40,9 +46,8 @@ interface CupTypeItem {
   isActive?: boolean;
 }
 
-interface ProductCupRule {
-  productId?: string;
-  productName?: string;
+interface SeriesCupRule {
+  id?: string;
   seriesId?: string;
   seriesName?: string;
   cupPrices: Record<string, { enabled: boolean; price: number }>;
@@ -52,6 +57,8 @@ interface ProductCupSaleItem {
   id: string; // `${productId}-${cupTypeId}`
   productId: string;
   productName: string;
+  seriesId?: string;
+  seriesName?: string | null;
   cupTypeId: string;
   cupTypeName: string;
   price: number;
@@ -100,6 +107,7 @@ export default function EndShiftPage() {
 
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
   const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
+  const [seriesList, setSeriesList] = useState<SeriesItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [salesItems, setSalesItems] = useState<ProductCupSaleItem[]>([]);
   const [cupStocks, setCupStocks] = useState<CupStockClosing[]>([]);
@@ -110,18 +118,22 @@ export default function EndShiftPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Dropdown / Tab Filter per Series
+  const [selectedSeriesFilter, setSelectedSeriesFilter] = useState<string>('ALL');
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       const todayStr = getWibDateString();
 
       try {
-        const [assignRes, prodRes, cupRes, reportRes, rulesRes] = await Promise.all([
+        const [assignRes, seriesRes, prodRes, cupRes, reportRes, rulesRes] = await Promise.all([
           api.get<AssignmentData[]>(`/booth-assignments?date=${todayStr}`),
+          api.get<SeriesItem[]>('/tea-series'),
           api.get<ProductItem[]>('/tea-products'),
           api.get<CupTypeItem[]>('/cup-types'),
           api.get<TodayReportData>(`/daily-reports/today?date=${todayStr}`),
-          api.get<ProductCupRule[]>('/cup-rules'),
+          api.get<SeriesCupRule[]>('/cup-rules'),
         ]);
 
         if (assignRes.success && Array.isArray(assignRes.data)) {
@@ -163,23 +175,33 @@ export default function EndShiftPage() {
           : defaultCupTypes;
         const activeCups = rawCups.filter((c) => c.isActive !== false);
 
+        const defaultSeries: SeriesItem[] = [
+          { id: '11111111-1111-1111-1111-111111111111', name: 'Original Tea Series' },
+          { id: '22222222-2222-2222-2222-222222222222', name: 'Yakult Series' },
+          { id: '33333333-3333-3333-3333-333333333333', name: 'Fruity Series' },
+        ];
+        const rawSeries = seriesRes.success && Array.isArray(seriesRes.data) && seriesRes.data.length > 0
+          ? seriesRes.data
+          : defaultSeries;
+        setSeriesList(rawSeries);
+
         const defaultProducts: ProductItem[] = [
-          { id: '11111111-1111-1111-1111-111111111101', name: 'Teh Baling Melati Original' },
-          { id: '11111111-1111-1111-1111-111111111102', name: 'Teh Kampul Lemon Segar' },
-          { id: '11111111-1111-1111-1111-111111111103', name: 'Teh Baling Yakult Segar' },
-          { id: '11111111-1111-1111-1111-111111111104', name: 'Teh Baling Lychee Fruity' },
+          { id: '11111111-1111-1111-1111-111111111101', name: 'Teh Baling Melati Original', seriesId: '11111111-1111-1111-1111-111111111111', seriesName: 'Original Tea Series' },
+          { id: '11111111-1111-1111-1111-111111111102', name: 'Teh Kampul Lemon Segar', seriesId: '11111111-1111-1111-1111-111111111111', seriesName: 'Original Tea Series' },
+          { id: '11111111-1111-1111-1111-111111111103', name: 'Teh Baling Yakult Segar', seriesId: '22222222-2222-2222-2222-222222222222', seriesName: 'Yakult Series' },
+          { id: '11111111-1111-1111-1111-111111111104', name: 'Teh Baling Lychee Fruity', seriesId: '33333333-3333-3333-3333-333333333333', seriesName: 'Fruity Series' },
         ];
         const rawProducts = prodRes.success && Array.isArray(prodRes.data) && prodRes.data.length > 0
           ? prodRes.data
           : defaultProducts;
         setProducts(rawProducts);
 
-        // Muat aturan mapping cup & harga per produk dari backend & localStorage
-        let storedRules: ProductCupRule[] = [];
+        // Muat aturan mapping cup & harga per series dari backend & localStorage
+        let storedRules: SeriesCupRule[] = [];
         if (rulesRes.success && Array.isArray(rulesRes.data) && rulesRes.data.length > 0) {
           storedRules = rulesRes.data;
         } else if (typeof window !== 'undefined') {
-          const rulesStr = localStorage.getItem('teh_baling_product_cup_rules') || localStorage.getItem('teh_baling_cup_rules');
+          const rulesStr = localStorage.getItem('teh_baling_series_cup_rules') || localStorage.getItem('teh_baling_product_cup_rules') || localStorage.getItem('teh_baling_cup_rules');
           if (rulesStr) {
             try {
               storedRules = JSON.parse(rulesStr);
@@ -189,14 +211,14 @@ export default function EndShiftPage() {
           }
         }
 
-        // Buat daftar kombinasi produk x ukuran cup dengan harga dari matriks mapping produk
+        // Buat daftar kombinasi produk x ukuran cup dengan harga dari matriks mapping series
         const saleItemsList: ProductCupSaleItem[] = [];
         rawProducts.forEach((p) => {
-          // Cari aturan mapping produk yang cocok (HARUS spesifik per produk, bukan series)
+          // Cari aturan mapping series yang cocok dengan seriesId atau seriesName produk
           const matchedRule = storedRules.find(
             (r) =>
-              (r.productId && r.productId === p.id) ||
-              (r.productName && r.productName.trim().toLowerCase() === p.name.trim().toLowerCase())
+              (r.seriesId && p.seriesId && r.seriesId === p.seriesId) ||
+              (r.seriesName && p.seriesName && r.seriesName.trim().toLowerCase() === p.seriesName.trim().toLowerCase())
           );
 
           activeCups.forEach((cup) => {
@@ -222,6 +244,8 @@ export default function EndShiftPage() {
                 id: `${p.id}-${cup.id}`,
                 productId: p.id,
                 productName: p.name,
+                seriesId: p.seriesId,
+                seriesName: p.seriesName,
                 cupTypeId: cup.id,
                 cupTypeName: cup.name,
                 price,
@@ -448,95 +472,43 @@ export default function EndShiftPage() {
               <span className="font-bold text-sm text-emerald-400">{formatRupiah(recordedFinal)}</span>
             </div>
             <div className="flex justify-between items-center font-bold text-white pt-1.5 border-t border-slate-800">
-              <span>Selisih Kasir:</span>
-              <span className={recordedVariance >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                {formatRupiah(recordedVariance)}
-              </span>
+              <span>Total Penjualan Dihitung:</span>
+              <span className="text-emerald-400">+{formatRupiah(Math.max(0, recordedVariance))}</span>
             </div>
-            {todayReport.notes && (
-              <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                <span className="font-bold text-slate-300">Catatan:</span> {todayReport.notes}
-              </div>
-            )}
           </div>
 
-          <div className="pt-2 flex flex-col gap-2.5">
-            <Link
-              href="/attendant"
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 px-4 text-sm font-bold text-white hover:bg-slate-800 transition"
-            >
-              Kembali ke Beranda Attendant
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+          <Link
+            href="/attendant"
+            className="inline-flex items-center justify-center w-full rounded-xl bg-slate-900 py-3 text-sm font-bold text-white shadow-sm hover:bg-slate-800 transition"
+          >
+            Kembali ke Dashboard Attendant
+          </Link>
         </div>
       </div>
     );
   }
 
-  // 2. JIKA AKSES DILUAR JADWAL ATAU TERKUNCI JAM OPERASIONAL -> LAYAR LOCK
-  if (!isAccessAllowed) {
-    return (
-      <div className="space-y-6 pb-24 max-w-lg mx-auto">
-        <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <Link
-              href="/attendant"
-              className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 transition flex items-center gap-1.5 border border-slate-700"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Kembali
-            </Link>
-            <span className="text-xs text-slate-300 font-mono">
-              {getWibDateFormatted()}
-            </span>
-          </div>
-          <h1 className="text-xl font-bold">Laporan Akhir Shift</h1>
-        </div>
+  // Filter products by selected series
+  const displayedProducts = selectedSeriesFilter === 'ALL'
+    ? products
+    : products.filter((p) => p.seriesId === selectedSeriesFilter || p.seriesName === selectedSeriesFilter);
 
-        <div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-xs">
-            <Lock className="w-8 h-8" />
-          </div>
+  // Grouping series with sold count for easy lookup
+  const seriesWithSoldCount = seriesList.map((s) => {
+    const soldInSeries = salesItems
+      .filter((si) => si.seriesId === s.id || si.seriesName === s.name)
+      .reduce((sum, item) => sum + item.qtySold, 0);
+    return {
+      ...s,
+      soldCount: soldInSeries,
+    };
+  });
 
-          <div className="space-y-2">
-            <h2 className="text-lg font-extrabold text-slate-900">Akses Akhiri Shift Terkunci</h2>
-            <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
-              {lockedReason}
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-amber-50 p-3.5 border border-amber-200 text-left text-xs text-amber-900 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Info Shift Hari Ini:</p>
-              <p className="mt-0.5 text-slate-700">
-                Akun: <strong className="text-slate-900">{user?.email || 'Attendant'}</strong>
-                <br />
-                Sesi Terdeteksi: <strong>Shift {isPagi ? 'Pagi (09:00 - 16:00)' : 'Sore (16:00 - 21:00)'}</strong>
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <Link
-              href="/attendant"
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 px-4 text-sm font-bold text-white hover:bg-slate-800 transition"
-            >
-              Kembali ke Beranda Attendant
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. FORM CLOSING SHIFT
   return (
-    <div className="space-y-6 pb-28 max-w-lg mx-auto">
-      <div className="rounded-xl bg-slate-900 p-5 text-white shadow-md">
-        <div className="flex items-center justify-between mb-3">
+    <div className="space-y-6 pb-24 max-w-lg mx-auto">
+      {/* Header Banner */}
+      <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-md">
+        <div className="flex items-center justify-between mb-2">
           <Link
             href="/attendant"
             className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 transition flex items-center gap-1.5 border border-slate-700"
@@ -562,7 +534,7 @@ export default function EndShiftPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* 1. Input Penjualan Produk Teh & Pilihan Ukuran Cup */}
+        {/* 1. Input Penjualan Produk Teh & Pilihan Ukuran Cup (Dengan Dropdown / Filter Series) */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
@@ -574,11 +546,74 @@ export default function EndShiftPage() {
             </span>
           </div>
 
-          <div className="space-y-4">
-            {products.length === 0 ? (
-              <p className="text-xs text-slate-500 py-2">Memuat daftar menu produk...</p>
+          {/* Dropdown Filter Series Teh */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-emerald-600" />
+                Pilih / Filter Series Teh:
+              </label>
+              <span className="text-[11px] font-medium text-slate-500">
+                {displayedProducts.length} Produk Ditampilkan
+              </span>
+            </div>
+
+            <select
+              value={selectedSeriesFilter}
+              onChange={(e) => setSelectedSeriesFilter(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-slate-50/70 px-3 py-2 text-xs font-bold text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">🌟 Tampilkan Semua Series ({totalProductsSold} Cup Terjual)</option>
+              {seriesWithSoldCount.map((s) => (
+                <option key={s.id} value={s.id}>
+                  🏷️ {s.name} {s.soldCount > 0 ? `(${s.soldCount} Cup Terjual)` : ''}
+                </option>
+              ))}
+            </select>
+
+            {/* Quick Filter Tab Chips (Touch Friendly) */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setSelectedSeriesFilter('ALL')}
+                className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold transition border ${
+                  selectedSeriesFilter === 'ALL'
+                    ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Semua ({totalProductsSold})
+              </button>
+              {seriesWithSoldCount.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedSeriesFilter(s.id)}
+                  className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold transition border flex items-center gap-1 ${
+                    selectedSeriesFilter === s.id
+                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{s.name}</span>
+                  {s.soldCount > 0 && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedSeriesFilter === s.id ? 'bg-emerald-800 text-emerald-100' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {s.soldCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* List Produk & Ukuran Cup */}
+          <div className="space-y-4 pt-1">
+            {displayedProducts.length === 0 ? (
+              <p className="text-xs text-slate-500 py-3 text-center bg-slate-50 rounded-lg">
+                Tidak ada produk dalam series ini.
+              </p>
             ) : (
-              products.map((product) => {
+              displayedProducts.map((product) => {
                 const productVariants = salesItems.filter((s) => s.productId === product.id);
                 const productSoldTotal = productVariants.reduce((sum, v) => sum + v.qtySold, 0);
 
@@ -588,7 +623,14 @@ export default function EndShiftPage() {
                     className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5"
                   >
                     <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-xs text-slate-900">{product.name}</h3>
+                      <div>
+                        <h3 className="font-bold text-xs text-slate-900">{product.name}</h3>
+                        {product.seriesName && (
+                          <span className="text-[10px] font-medium text-emerald-700">
+                            {product.seriesName}
+                          </span>
+                        )}
+                      </div>
                       {productSoldTotal > 0 && (
                         <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
                           {productSoldTotal} Cup
@@ -597,29 +639,33 @@ export default function EndShiftPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      {productVariants.map((variant) => (
-                        <div
-                          key={variant.id}
-                          className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200/90 shadow-2xs"
-                        >
-                          <div>
-                            <p className="text-xs font-semibold text-slate-800">{variant.cupTypeName}</p>
-                            <p className="text-[11px] font-bold text-emerald-700">{formatRupiah(variant.price)}</p>
+                      {productVariants.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic">Tidak ada ukuran cup yang aktif untuk series produk ini.</p>
+                      ) : (
+                        productVariants.map((variant) => (
+                          <div
+                            key={variant.id}
+                            className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200/90 shadow-2xs"
+                          >
+                            <div>
+                              <p className="text-xs font-semibold text-slate-800">{variant.cupTypeName}</p>
+                              <p className="text-[11px] font-bold text-emerald-700">{formatRupiah(variant.price)}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min="0"
+                                value={variant.qtySold === 0 ? '' : variant.qtySold}
+                                onChange={(e) => handleQtyChange(variant.id, e.target.value)}
+                                placeholder="0"
+                                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
+                              />
+                              <span className="text-xs font-medium text-slate-500">Cup</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              min="0"
-                              value={variant.qtySold === 0 ? '' : variant.qtySold}
-                              onChange={(e) => handleQtyChange(variant.id, e.target.value)}
-                              placeholder="0"
-                              className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
-                            />
-                            <span className="text-xs font-medium text-slate-500">Cup</span>
-                          </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 );
