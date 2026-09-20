@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Flame, History, LogOut, Truck } from 'lucide-react';
@@ -13,7 +14,12 @@ const productionNavItems = [
 
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -36,7 +42,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
 
         <div className="flex items-center gap-2">
           <div className="text-right hidden sm:block">
-            <p className="text-xs font-semibold text-white">{user?.name || 'Joko Produksi'}</p>
+            <p className="text-xs font-semibold text-white">{mounted && user?.name ? user.name : 'Staf Produksi'}</p>
             <p className="text-[10px] text-amber-300 font-mono">PRODUCTION</p>
           </div>
           <button

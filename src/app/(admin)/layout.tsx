@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -37,7 +37,12 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -88,11 +93,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-emerald-900 border border-emerald-700 flex items-center justify-center text-emerald-300 font-bold text-xs">
-                {user?.name?.[0] || 'A'}
+                {mounted && user?.name ? user.name[0] : 'A'}
               </div>
               <div className="truncate">
-                <p className="text-xs font-semibold text-white truncate">{user?.name || 'Pak Budi (Owner)'}</p>
-                <p className="text-[10px] text-emerald-400 font-medium">{user?.email || 'admin@tehbaling.com'}</p>
+                <p className="text-xs font-semibold text-white truncate">{mounted && user?.name ? user.name : 'Administrator'}</p>
+                <p className="text-[10px] text-emerald-400 font-medium">{mounted && user?.email ? user.email : 'admin@tehbaling.com'}</p>
               </div>
             </div>
             <button
@@ -135,7 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <User className="w-4 h-4" />
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-xs font-bold text-slate-900">{user?.name || 'Pak Budi (Owner)'}</p>
+                <p className="text-xs font-bold text-slate-900">{mounted && user?.name ? user.name : 'Administrator'}</p>
                 <p className="text-[10px] text-slate-500 font-semibold">ADMINISTRATOR</p>
               </div>
               <button

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -9,10 +9,15 @@ import { LogOut, ArrowRight, ShieldCheck } from 'lucide-react';
 export default function LoginPage() {
   const router = useRouter();
   const { user, accessToken, setAuth, logout } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const getDashboardUrl = (role?: string) => {
     if (role === 'BOOTH_ATTENDANT') return '/attendant';
@@ -63,7 +68,7 @@ export default function LoginPage() {
         </div>
 
         {/* Active Session Warning Banner */}
-        {user && accessToken && (
+        {mounted && user && accessToken && (
           <div className="rounded-lg bg-emerald-50 p-4 border border-emerald-200 space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />

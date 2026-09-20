@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, PlayCircle, StopCircle, History, LogOut } from 'lucide-react';
@@ -14,9 +15,14 @@ const attendantNavItems = [
 
 export default function AttendantLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
 
-  const displayName = user?.name || user?.email || 'Attendant';
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const displayName = mounted && user ? (user.name || user.email || 'Attendant') : 'Attendant';
 
   const handleLogout = () => {
     logout();
