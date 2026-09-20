@@ -285,7 +285,7 @@ export default function EndShiftPage() {
 
   const isPagi = activeSession === 'PAGI';
   const endWindowMin = isPagi ? 9.0 : 16.0;
-  const endWindowMax = isPagi ? 18.0 : 24.0;
+  const endWindowMax = isPagi ? 18.0 : 23.0;
   const isTimeValid = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
 
   const isAccessAllowed = hasAssignment && isTimeValid;
@@ -302,7 +302,7 @@ export default function EndShiftPage() {
   } else if (currentHourDec < endWindowMin) {
     lockedReason = `Akses tutup shift baru dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '16:00'} WIB).`;
   } else if (currentHourDec > endWindowMax) {
-    lockedReason = `Batas waktu toleransi pengisian tutup shift telah berakhir (Maksimal pukul ${isPagi ? '18:00' : '24:00'} WIB).`;
+    lockedReason = `Batas waktu toleransi pengisian tutup shift telah berakhir (Maksimal pukul ${isPagi ? '18:00' : '23:00'} WIB / 2 jam setelah outlet tutup).`;
   }
 
   // Auto Calculations
