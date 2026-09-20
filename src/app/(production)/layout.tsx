@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Flame, History, LogOut } from 'lucide-react';
+import { Flame, History, LogOut, Truck } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 
 const productionNavItems = [
-  { label: 'Input Masak Teh', href: '/production', icon: Flame },
+  { label: 'Masak Teh', href: '/production', icon: Flame },
+  { label: 'Kirim ke Booth', href: '/production/delivery', icon: Truck },
   { label: 'Riwayat Dapur', href: '/production/history', icon: History },
 ];
 
