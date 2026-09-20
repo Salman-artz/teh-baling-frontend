@@ -224,16 +224,19 @@ export default function ProductionDeliveryPage() {
         </p>
       </div>
 
-      {/* Widget Stok Teh Dapur Hari Ini (Anti Defisit) */}
+      {/* Widget Stok Teh Dapur Hari Ini (Anti Defisit - Reset Per Hari) */}
       <div className="rounded-2xl border-2 border-emerald-300/80 bg-gradient-to-b from-emerald-50 to-white p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5">
           <div className="flex items-center gap-2">
             <Droplets className="w-5 h-5 text-emerald-700" />
-            <span className="text-xs font-extrabold uppercase text-emerald-950 tracking-wide">
-              Stok Teh Dapur Hari Ini
-            </span>
+            <div>
+              <span className="text-xs font-extrabold uppercase text-emerald-950 tracking-wide block">
+                Stok Teh Dapur Harian
+              </span>
+              <span className="text-[10px] text-slate-500 font-medium">Reset otomatis setiap ganti hari (Fresh Daily)</span>
+            </div>
           </div>
-          <span className="text-[11px] font-bold text-emerald-700 font-mono">
+          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-mono">
             {currentDate || 'Hari Ini'}
           </span>
         </div>
