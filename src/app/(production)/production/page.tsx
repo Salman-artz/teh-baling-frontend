@@ -33,8 +33,8 @@ export default function ProductionPage() {
         const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10);
         const totalMinutes = hour * 60 + minute;
 
-        // Jam 5 pagi (05:00 = 300) sampai jam 23:59 (1439 menit) WIB
-        const open = totalMinutes >= 5 * 60 && totalMinutes <= 23 * 60 + 59;
+        // Jam 5 pagi (05:00 = 300) sampai jam 9 malam (21:00 = 1260 menit) WIB
+        const open = totalMinutes >= 5 * 60 && totalMinutes <= 21 * 60;
         setIsOperatingHours(open);
       } catch {
         setIsOperatingHours(true);
@@ -51,7 +51,7 @@ export default function ProductionPage() {
     setSuccess(false);
 
     if (!isOperatingHours) {
-      setError('Akses laporan produksi hanya dapat diisi pada jam operasional 05:00 - 23:59 WIB.');
+      setError('Akses laporan produksi hanya dapat diisi pada jam operasional 05:00 - 21:00 WIB.');
       return;
     }
 
@@ -118,7 +118,7 @@ export default function ProductionPage() {
           </div>
         </div>
         <div className="flex items-center justify-between pt-2 border-t border-amber-200/60">
-          <span className="text-slate-600 font-medium">Jam Operasional Input: <strong>05:00 - 23:59 WIB</strong></span>
+          <span className="text-slate-600 font-medium">Jam Operasional Input: <strong>05:00 - 21:00 WIB</strong></span>
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
             isOperatingHours
               ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
@@ -136,7 +136,7 @@ export default function ProductionPage() {
           <div className="space-y-1">
             <h3 className="text-sm font-bold text-amber-950">Akses Input Produksi Sedang Ditutup</h3>
             <p className="text-xs text-amber-800 leading-relaxed">
-              Penginputan laporan memasak teh hanya dapat dilakukan saat jam operasional <strong>05:00 WIB s/d 23:59 WIB</strong>.
+              Penginputan laporan memasak teh hanya dapat dilakukan saat jam operasional <strong>05:00 WIB s/d 21:00 WIB</strong>.
             </p>
             <p className="text-[11px] text-amber-700 font-medium">
               Silakan kembali saat jam operasional telah aktif. Anda tetap dapat meninjau rekap di menu Riwayat.
@@ -202,7 +202,7 @@ export default function ProductionPage() {
           {!isOperatingHours ? (
             <>
               <Lock className="w-5 h-5" />
-              <span>Akses Ditutup (05:00 - 23:59 WIB)</span>
+              <span>Akses Ditutup (05:00 - 21:00 WIB)</span>
             </>
           ) : (
             <>
