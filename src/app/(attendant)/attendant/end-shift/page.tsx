@@ -7,7 +7,7 @@ import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, RefreshCw, Package, ShieldCheck, Coffee, Filter } from 'lucide-react';
+import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, RefreshCw, Package, ShieldCheck, Coffee, ChevronDown, Layers } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -118,8 +118,8 @@ export default function EndShiftPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Dropdown / Tab Filter per Series
-  const [selectedSeriesFilter, setSelectedSeriesFilter] = useState<string>('ALL');
+  // Accordion state: Awal tertutup semua (default {})
+  const [expandedSeries, setExpandedSeries] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function loadData() {
@@ -324,6 +324,26 @@ export default function EndShiftPage() {
   }, 0);
   const cupVariance = totalCupsUsed - totalProductsSold;
 
+  const toggleSeries = (seriesId: string) => {
+    setExpandedSeries((prev) => ({
+      ...prev,
+      [seriesId]: !prev[seriesId],
+    }));
+  };
+
+  const handleExpandAll = () => {
+    const all: Record<string, boolean> = {};
+    seriesList.forEach((s) => {
+      all[s.id] = true;
+    });
+    all['unassigned'] = true;
+    setExpandedSeries(all);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedSeries({});
+  };
+
   const handleQtyChange = (itemId: string, qtyStr: string) => {
     const qty = parseInt(qtyStr, 10);
     const validQty = isNaN(qty) ? 0 : Math.max(0, qty);
@@ -488,21 +508,28 @@ export default function EndShiftPage() {
     );
   }
 
-  // Filter products by selected series
-  const displayedProducts = selectedSeriesFilter === 'ALL'
-    ? products
-    : products.filter((p) => p.seriesId === selectedSeriesFilter || p.seriesName === selectedSeriesFilter);
-
-  // Grouping series with sold count for easy lookup
-  const seriesWithSoldCount = seriesList.map((s) => {
-    const soldInSeries = salesItems
-      .filter((si) => si.seriesId === s.id || si.seriesName === s.name)
+  // Kelompokkan produk per series untuk tampilan collapsible dropdown per series
+  const groupedBySeries = seriesList.map((series) => {
+    const seriesProducts = products.filter(
+      (p) => p.seriesId === series.id || p.seriesName?.trim().toLowerCase() === series.name.trim().toLowerCase()
+    );
+    const seriesSoldTotal = salesItems
+      .filter((si) => si.seriesId === series.id || si.seriesName?.trim().toLowerCase() === series.name.trim().toLowerCase())
       .reduce((sum, item) => sum + item.qtySold, 0);
+
     return {
-      ...s,
-      soldCount: soldInSeries,
+      ...series,
+      products: seriesProducts,
+      totalSold: seriesSoldTotal,
     };
   });
+
+  const unassignedProducts = products.filter(
+    (p) => !seriesList.some((s) => s.id === p.seriesId || s.name.trim().toLowerCase() === p.seriesName?.trim().toLowerCase())
+  );
+  const unassignedSoldTotal = salesItems
+    .filter((si) => unassignedProducts.some((p) => p.id === si.productId))
+    .reduce((sum, item) => sum + item.qtySold, 0);
 
   return (
     <div className="space-y-6 pb-24 max-w-lg mx-auto">
@@ -534,142 +561,227 @@ export default function EndShiftPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* 1. Input Penjualan Produk Teh & Pilihan Ukuran Cup (Dengan Dropdown / Filter Series) */}
+        {/* 1. Input Penjualan Produk Teh & Pilihan Ukuran Cup (Dropdown / Accordion per Series) */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
               <Coffee className="w-4 h-4 text-emerald-600" />
-              <h2 className="font-bold text-slate-900 text-sm">1. Penjualan Produk & Ukuran Cup</h2>
+              <h2 className="font-bold text-slate-900 text-sm">1. Penjualan Produk per Series</h2>
             </div>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
               {totalProductsSold} Cup Terjual
             </span>
           </div>
 
-          {/* Dropdown Filter Series Teh */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5 text-emerald-600" />
-                Pilih / Filter Series Teh:
-              </label>
-              <span className="text-[11px] font-medium text-slate-500">
-                {displayedProducts.length} Produk Ditampilkan
-              </span>
-            </div>
-
-            <select
-              value={selectedSeriesFilter}
-              onChange={(e) => setSelectedSeriesFilter(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-50/70 px-3 py-2 text-xs font-bold text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none"
-            >
-              <option value="ALL">🌟 Tampilkan Semua Series ({totalProductsSold} Cup Terjual)</option>
-              {seriesWithSoldCount.map((s) => (
-                <option key={s.id} value={s.id}>
-                  🏷️ {s.name} {s.soldCount > 0 ? `(${s.soldCount} Cup Terjual)` : ''}
-                </option>
-              ))}
-            </select>
-
-            {/* Quick Filter Tab Chips (Touch Friendly) */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar">
-              <button
-                type="button"
-                onClick={() => setSelectedSeriesFilter('ALL')}
-                className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold transition border ${
-                  selectedSeriesFilter === 'ALL'
-                    ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                Semua ({totalProductsSold})
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>Klik pada Series untuk membuka daftar menu:</span>
+            <div className="flex items-center gap-2 font-semibold text-emerald-700">
+              <button type="button" onClick={handleExpandAll} className="hover:underline">
+                Buka Semua
               </button>
-              {seriesWithSoldCount.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedSeriesFilter(s.id)}
-                  className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold transition border flex items-center gap-1 ${
-                    selectedSeriesFilter === s.id
-                      ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{s.name}</span>
-                  {s.soldCount > 0 && (
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedSeriesFilter === s.id ? 'bg-emerald-800 text-emerald-100' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {s.soldCount}
-                    </span>
-                  )}
-                </button>
-              ))}
+              <span>•</span>
+              <button type="button" onClick={handleCollapseAll} className="hover:underline">
+                Tutup Semua
+              </button>
             </div>
           </div>
 
-          {/* List Produk & Ukuran Cup */}
-          <div className="space-y-4 pt-1">
-            {displayedProducts.length === 0 ? (
+          {/* List Dropdown Accordion per Series */}
+          <div className="space-y-3">
+            {products.length === 0 ? (
               <p className="text-xs text-slate-500 py-3 text-center bg-slate-50 rounded-lg">
-                Tidak ada produk dalam series ini.
+                Memuat daftar menu produk...
               </p>
             ) : (
-              displayedProducts.map((product) => {
-                const productVariants = salesItems.filter((s) => s.productId === product.id);
-                const productSoldTotal = productVariants.reduce((sum, v) => sum + v.qtySold, 0);
+              groupedBySeries.map((seriesGroup) => {
+                const isOpen = Boolean(expandedSeries[seriesGroup.id]);
 
                 return (
                   <div
-                    key={product.id}
-                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5"
+                    key={seriesGroup.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden shadow-2xs transition"
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-bold text-xs text-slate-900">{product.name}</h3>
-                        {product.seriesName && (
-                          <span className="text-[10px] font-medium text-emerald-700">
-                            {product.seriesName}
+                    {/* Header Dropdown Series (Bisa Diklik untuk Buka/Tutup) */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSeries(seriesGroup.id)}
+                      className="w-full flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 transition text-left cursor-pointer select-none"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-1.5 rounded-lg ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-xs text-slate-900">{seriesGroup.name}</h3>
+                          <p className="text-[10px] text-slate-500">
+                            {seriesGroup.products.length} Varian Menu
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {seriesGroup.totalSold > 0 ? (
+                          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                            {seriesGroup.totalSold} Cup
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                            0 Cup
                           </span>
                         )}
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-emerald-600' : ''}`} />
                       </div>
-                      {productSoldTotal > 0 && (
-                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
-                          {productSoldTotal} Cup
-                        </span>
-                      )}
-                    </div>
+                    </button>
 
-                    <div className="space-y-1.5">
-                      {productVariants.length === 0 ? (
-                        <p className="text-[11px] text-slate-400 italic">Tidak ada ukuran cup yang aktif untuk series produk ini.</p>
-                      ) : (
-                        productVariants.map((variant) => (
-                          <div
-                            key={variant.id}
-                            className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200/90 shadow-2xs"
-                          >
-                            <div>
-                              <p className="text-xs font-semibold text-slate-800">{variant.cupTypeName}</p>
-                              <p className="text-[11px] font-bold text-emerald-700">{formatRupiah(variant.price)}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                min="0"
-                                value={variant.qtySold === 0 ? '' : variant.qtySold}
-                                onChange={(e) => handleQtyChange(variant.id, e.target.value)}
-                                placeholder="0"
-                                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
-                              />
-                              <span className="text-xs font-medium text-slate-500">Cup</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    {/* Isi Dropdown: Produk-Produk di dalam Series Ini */}
+                    {isOpen && (
+                      <div className="p-3.5 space-y-3 border-t border-slate-100 bg-slate-50/40">
+                        {seriesGroup.products.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic text-center py-2">
+                            Belum ada produk terdaftar dalam series ini.
+                          </p>
+                        ) : (
+                          seriesGroup.products.map((product) => {
+                            const productVariants = salesItems.filter((s) => s.productId === product.id);
+                            const productSoldTotal = productVariants.reduce((sum, v) => sum + v.qtySold, 0);
+
+                            return (
+                              <div
+                                key={product.id}
+                                className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 shadow-2xs"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-bold text-xs text-slate-900">{product.name}</h4>
+                                  {productSoldTotal > 0 && (
+                                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      {productSoldTotal} Cup
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  {productVariants.length === 0 ? (
+                                    <p className="text-[11px] text-slate-400 italic">Tidak ada ukuran cup yang aktif.</p>
+                                  ) : (
+                                    productVariants.map((variant) => (
+                                      <div
+                                        key={variant.id}
+                                        className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-200/80"
+                                      >
+                                        <div>
+                                          <p className="text-xs font-semibold text-slate-800">{variant.cupTypeName}</p>
+                                          <p className="text-[11px] font-bold text-emerald-700">{formatRupiah(variant.price)}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <input
+                                            type="number"
+                                            inputMode="numeric"
+                                            min="0"
+                                            value={variant.qtySold === 0 ? '' : variant.qtySold}
+                                            onChange={(e) => handleQtyChange(variant.id, e.target.value)}
+                                            placeholder="0"
+                                            className="w-16 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
+                                          />
+                                          <span className="text-xs font-medium text-slate-500">Cup</span>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
+            )}
+
+            {/* Produk tanpa series jika ada */}
+            {unassignedProducts.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden shadow-2xs transition">
+                <button
+                  type="button"
+                  onClick={() => toggleSeries('unassigned')}
+                  className="w-full flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 transition text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-xs text-slate-900">Menu Lainnya</h3>
+                      <p className="text-[10px] text-slate-500">{unassignedProducts.length} Varian</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {unassignedSoldTotal > 0 ? (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        {unassignedSoldTotal} Cup
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        0 Cup
+                      </span>
+                    )}
+                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSeries['unassigned'] ? 'rotate-180 text-emerald-600' : ''}`} />
+                  </div>
+                </button>
+
+                {expandedSeries['unassigned'] && (
+                  <div className="p-3.5 space-y-3 border-t border-slate-100 bg-slate-50/40">
+                    {unassignedProducts.map((product) => {
+                      const productVariants = salesItems.filter((s) => s.productId === product.id);
+                      const productSoldTotal = productVariants.reduce((sum, v) => sum + v.qtySold, 0);
+
+                      return (
+                        <div
+                          key={product.id}
+                          className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 shadow-2xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-xs text-slate-900">{product.name}</h4>
+                            {productSoldTotal > 0 && (
+                              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                {productSoldTotal} Cup
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {productVariants.map((variant) => (
+                              <div
+                                key={variant.id}
+                                className="flex items-center justify-between p-2 rounded-lg bg-slate-50/70 border border-slate-200/80"
+                              >
+                                <div>
+                                  <p className="text-xs font-semibold text-slate-800">{variant.cupTypeName}</p>
+                                  <p className="text-[11px] font-bold text-emerald-700">{formatRupiah(variant.price)}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    value={variant.qtySold === 0 ? '' : variant.qtySold}
+                                    onChange={(e) => handleQtyChange(variant.id, e.target.value)}
+                                    placeholder="0"
+                                    className="w-16 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-bold text-center text-slate-900 focus:border-emerald-500 focus:outline-none"
+                                  />
+                                  <span className="text-xs font-medium text-slate-500">Cup</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
