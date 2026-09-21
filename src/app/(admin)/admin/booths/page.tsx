@@ -37,7 +37,7 @@ export default function BoothsPage() {
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchBooths = async () => {
@@ -271,20 +271,6 @@ export default function BoothsPage() {
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200">
           <button
             type="button"
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              statusFilter === 'ALL'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-          >
-            <span>Semua Booth</span>
-            <span className="rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] font-mono">
-              {countAll}
-            </span>
-          </button>
-          <button
-            type="button"
             onClick={() => setStatusFilter('ACTIVE')}
             className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               statusFilter === 'ACTIVE'
@@ -297,6 +283,20 @@ export default function BoothsPage() {
               statusFilter === 'ACTIVE' ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 text-slate-700'
             }`}>
               {countActive}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'ALL'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <span>Semua Booth</span>
+            <span className="rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] font-mono">
+              {countAll}
             </span>
           </button>
           <button

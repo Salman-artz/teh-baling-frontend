@@ -90,7 +90,7 @@ export default function AssignmentsPage() {
 
   const [date, setDate] = useState(todayStr);
   const [shiftType, setShiftType] = useState<ShiftType>('PAGI');
-  const [filterDate, setFilterDate] = useState<string>('ALL');
+  const [filterDate, setFilterDate] = useState<string>(todayStr);
   const [filterShift, setFilterShift] = useState<string>('ALL');
   const [boothId, setBoothId] = useState('');
   const [userId, setUserId] = useState('');
@@ -402,8 +402,18 @@ export default function AssignmentsPage() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Filter Tanggal */}
           <button
+            type="button"
+            onClick={() => setFilterDate(todayStr)}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+              filterDate === todayStr ? 'bg-emerald-700 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            📅 Hari Ini
+          </button>
+          <button
+            type="button"
             onClick={() => setFilterDate('ALL')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
               filterDate === 'ALL' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
