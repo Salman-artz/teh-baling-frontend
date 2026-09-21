@@ -18,6 +18,7 @@ export default function UsersPage() {
   const currentUser = useAuthStore((state) => state.user);
   const [userList, setUserList] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'ALL' | 'INACTIVE'>('ACTIVE');
   const [selectedRole, setSelectedRole] = useState('ALL');
   const [showTestUsers, setShowTestUsers] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -55,7 +56,13 @@ export default function UsersPage() {
 
   const visibleUsersPool = userList.filter((u) => showTestUsers || !isTestUser(u));
 
+  const countActive = visibleUsersPool.filter((u) => u.isActive).length;
+  const countInactive = visibleUsersPool.filter((u) => !u.isActive).length;
+  const countAll = visibleUsersPool.length;
+
   const filteredUsers = visibleUsersPool.filter((u) => {
+    if (statusFilter === 'ACTIVE' && !u.isActive) return false;
+    if (statusFilter === 'INACTIVE' && u.isActive) return false;
     if (selectedRole !== 'ALL' && u.role !== selectedRole) return false;
     return true;
   });
@@ -285,21 +292,85 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Filter Role */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm font-medium text-slate-700">Filter Peran:</label>
-          <select
-            data-testid="user-role-filter"
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+      {/* Filter Controls (Status Tabs, Role Selector, and Secret Testing Toggle) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200">
+          <button
+            type="button"
+            data-testid="filter-active-users"
+            onClick={() => setStatusFilter('ACTIVE')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'ACTIVE'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-emerald-800 hover:bg-emerald-50'
+            }`}
           >
-            <option value="ALL">Semua Peran ({visibleUsersPool.length})</option>
-            <option value="ADMIN">Administrator</option>
-            <option value="BOOTH_ATTENDANT">Staf Stand (Attendant)</option>
-            <option value="PRODUCTION">Staf Dapur Produksi</option>
-          </select>
+            <span>🟢 Aktif</span>
+            <span
+              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+                statusFilter === 'ACTIVE' ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {countActive}
+            </span>
+          </button>
+          <button
+            type="button"
+            data-testid="filter-all-users"
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'ALL'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-emerald-800 hover:bg-emerald-50'
+            }`}
+          >
+            <span>Semua</span>
+            <span
+              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+                statusFilter === 'ALL' ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {countAll}
+            </span>
+          </button>
+          <button
+            type="button"
+            data-testid="filter-inactive-users"
+            onClick={() => setStatusFilter('INACTIVE')}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'INACTIVE'
+                ? 'bg-rose-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-rose-800 hover:bg-rose-50'
+            }`}
+          >
+            <span>🔴 Non-Aktif</span>
+            <span
+              className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+                statusFilter === 'INACTIVE' ? 'bg-rose-800 text-rose-100' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {countInactive}
+            </span>
+          </button>
+        </div>
+
+        {/* Role Filter & Secret Testing Toggle */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-slate-600">Peran:</label>
+            <select
+              data-testid="user-role-filter"
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-900 focus:border-emerald-500 focus:outline-none"
+            >
+              <option value="ALL">Semua Peran</option>
+              <option value="ADMIN">Administrator</option>
+              <option value="BOOTH_ATTENDANT">Staf Stand (Attendant)</option>
+              <option value="PRODUCTION">Staf Dapur Produksi</option>
+            </select>
+          </div>
 
           {/* Pencetan Tersembunyi / Discrete Toggle Akun Testing */}
           <button
@@ -325,16 +396,6 @@ export default function UsersPage() {
               </>
             )}
           </button>
-        </div>
-        <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-            Aktif: {visibleUsersPool.filter((u) => u.isActive).length}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
-            Non-Aktif: {visibleUsersPool.filter((u) => !u.isActive).length}
-          </span>
         </div>
       </div>
 
