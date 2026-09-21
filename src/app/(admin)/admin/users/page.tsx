@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, Power, UserPlus, RefreshCw, CheckCircle2, AlertCircle, FlaskConical, EyeOff } from 'lucide-react';
+import { Pencil, Trash2, Power, UserPlus, RefreshCw, CheckCircle2, AlertCircle, FlaskConical, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -26,6 +26,7 @@ export default function UsersPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION'>('BOOTH_ATTENDANT');
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -72,6 +73,7 @@ export default function UsersPage() {
     setName('');
     setEmail('');
     setPassword('');
+    setShowPassword(false);
     setRole('BOOTH_ATTENDANT');
     setError(null);
     setShowModal(true);
@@ -82,6 +84,7 @@ export default function UsersPage() {
     setName(u.name);
     setEmail(u.email);
     setPassword('');
+    setShowPassword(false);
     setRole(u.role);
     setError(null);
     setShowModal(true);
@@ -443,15 +446,25 @@ export default function UsersPage() {
               <label className="block text-sm font-medium text-slate-700">
                 Password {editingId ? <span className="text-xs text-slate-400">(Biarkan kosong jika tidak diubah)</span> : '*'}
               </label>
-              <input
-                data-testid="user-password-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-                placeholder={editingId ? '••••••••' : 'Minimal 6 karakter'}
-                required={!editingId}
-              />
+              <div className="relative mt-1">
+                <input
+                  data-testid="user-password-input"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full rounded-md border border-slate-300 pl-3 pr-10 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+                  placeholder={editingId ? '••••••••' : 'Minimal 6 karakter'}
+                  required={!editingId}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
+                  title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <div>
