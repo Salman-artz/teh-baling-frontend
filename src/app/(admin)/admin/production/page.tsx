@@ -480,7 +480,7 @@ export default function AdminProductionPage() {
               <div className="relative">
                 <input
                   type="number"
-                  step="0.5"
+                  step="any"
                   min="0.1"
                   value={formCookingLiters}
                   onChange={(e) => setFormCookingLiters(e.target.value)}

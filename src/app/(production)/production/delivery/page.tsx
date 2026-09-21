@@ -385,7 +385,7 @@ export default function ProductionDeliveryPage() {
           <div className="relative mt-2">
             <input
               type="number"
-              step="0.5"
+              step="any"
               min="0.1"
               max={remainingStock > 0 ? remainingStock : undefined}
               inputMode="decimal"

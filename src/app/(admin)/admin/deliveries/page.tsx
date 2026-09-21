@@ -626,7 +626,7 @@ export default function AdminDeliveriesPage() {
               <div className="relative">
                 <input
                   type="number"
-                  step="0.5"
+                  step="any"
                   min="0.1"
                   value={formDeliveryLiters}
                   onChange={(e) => setFormDeliveryLiters(e.target.value)}

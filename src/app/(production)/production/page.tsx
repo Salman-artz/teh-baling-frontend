@@ -179,7 +179,8 @@ export default function ProductionPage() {
           <div className="relative mt-2">
             <input
               type="number"
-              step="0.5"
+              step="any"
+              min="0.1"
               inputMode="decimal"
               data-testid="total-liters-input"
               value={totalLiters}
