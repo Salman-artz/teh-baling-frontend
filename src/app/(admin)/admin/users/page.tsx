@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Trash2, Power, UserPlus, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, Power, UserPlus, RefreshCw, CheckCircle2, AlertCircle, FlaskConical, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -19,6 +19,7 @@ export default function UsersPage() {
   const [userList, setUserList] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('ALL');
+  const [showTestUsers, setShowTestUsers] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -28,6 +29,11 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const isTestUser = (u: UserItem) =>
+    u.name.toLowerCase().includes('test') || u.email.toLowerCase().includes('test');
+
+  const testUsersCount = userList.filter(isTestUser).length;
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -47,8 +53,12 @@ export default function UsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const filteredUsers =
-    selectedRole === 'ALL' ? userList : userList.filter((u) => u.role === selectedRole);
+  const visibleUsersPool = userList.filter((u) => showTestUsers || !isTestUser(u));
+
+  const filteredUsers = visibleUsersPool.filter((u) => {
+    if (selectedRole !== 'ALL' && u.role !== selectedRole) return false;
+    return true;
+  });
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -277,7 +287,7 @@ export default function UsersPage() {
 
       {/* Filter Role */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-medium text-slate-700">Filter Peran:</label>
           <select
             data-testid="user-role-filter"
@@ -285,20 +295,45 @@ export default function UsersPage() {
             onChange={(e) => setSelectedRole(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
           >
-            <option value="ALL">Semua Peran ({userList.length})</option>
+            <option value="ALL">Semua Peran ({visibleUsersPool.length})</option>
             <option value="ADMIN">Administrator</option>
             <option value="BOOTH_ATTENDANT">Staf Stand (Attendant)</option>
             <option value="PRODUCTION">Staf Dapur Produksi</option>
           </select>
+
+          {/* Pencetan Tersembunyi / Discrete Toggle Akun Testing */}
+          <button
+            type="button"
+            data-testid="toggle-test-users-btn"
+            onClick={() => setShowTestUsers((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition cursor-pointer ${
+              showTestUsers
+                ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-xs'
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            }`}
+            title={showTestUsers ? 'Sembunyikan akun testing' : 'Pencetan tersembunyi: Klik untuk menampilkan akun testing'}
+          >
+            {showTestUsers ? (
+              <>
+                <EyeOff className="h-3.5 w-3.5 text-amber-700" />
+                <span>Sembunyikan Akun Testing ({testUsersCount})</span>
+              </>
+            ) : (
+              <>
+                <FlaskConical className="h-3.5 w-3.5 opacity-60" />
+                <span className="opacity-70">🧪</span>
+              </>
+            )}
+          </button>
         </div>
         <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-            Aktif: {userList.filter((u) => u.isActive).length}
+            Aktif: {visibleUsersPool.filter((u) => u.isActive).length}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
-            Non-Aktif: {userList.filter((u) => !u.isActive).length}
+            Non-Aktif: {visibleUsersPool.filter((u) => !u.isActive).length}
           </span>
         </div>
       </div>
@@ -439,6 +474,11 @@ export default function UsersPage() {
                             {isSelf && (
                               <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
                                 Anda
+                              </span>
+                            )}
+                            {isTestUser(user) && (
+                              <span className="rounded bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                                🧪 Testing
                               </span>
                             )}
                           </div>
