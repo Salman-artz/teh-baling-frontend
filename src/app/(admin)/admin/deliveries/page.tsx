@@ -50,8 +50,13 @@ interface BoothOption {
 
 interface StockSummary {
   date: string;
+  yesterdayDate?: string;
+  initialStock?: number;
+  initialKitchenStock?: number;
+  initialBoothStock?: number;
   totalCooked: number;
   totalDelivered: number;
+  totalAvailableStock?: number;
   remainingStock: number;
 }
 
@@ -356,7 +361,7 @@ export default function AdminDeliveriesPage() {
             {loadingStock ? '...' : `${stockSummary?.remainingStock ?? 0} Liter`}
           </p>
           <p className="mt-1 text-[11px] font-semibold text-slate-500">
-            Dimasak: {stockSummary?.totalCooked ?? 0} L | Terkirim: {stockSummary?.totalDelivered ?? 0} L
+            Awal: {stockSummary?.initialStock ?? 0} L | Masak: {stockSummary?.totalCooked ?? 0} L | Kirim: {stockSummary?.totalDelivered ?? 0} L
           </p>
         </div>
       </div>

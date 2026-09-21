@@ -26,8 +26,13 @@ interface BoothOption {
 
 interface StockSummary {
   date: string;
+  yesterdayDate?: string;
+  initialStock?: number;
+  initialKitchenStock?: number;
+  initialBoothStock?: number;
   totalCooked: number;
   totalDelivered: number;
+  totalAvailableStock?: number;
   remainingStock: number;
 }
 
@@ -241,7 +246,19 @@ export default function ProductionDeliveryPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200/80">
+            <p className="text-[10px] font-bold uppercase text-blue-800 flex items-center justify-center gap-1">
+              <Droplets className="w-3 h-3 text-blue-600" /> Stok Awal
+            </p>
+            <p className="text-base font-black text-blue-950 mt-0.5">
+              {loadingStock ? '...' : `${stockSummary?.initialStock ?? 0} L`}
+            </p>
+            <p className="text-[9px] text-blue-600 font-semibold mt-0.5 truncate">
+              Dapur {stockSummary?.initialKitchenStock ?? 0}L + Booth {stockSummary?.initialBoothStock ?? 0}L
+            </p>
+          </div>
+
           <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200/80">
             <p className="text-[10px] font-bold uppercase text-amber-800 flex items-center justify-center gap-1">
               <Flame className="w-3 h-3 text-amber-600" /> Dimasak
@@ -249,6 +266,7 @@ export default function ProductionDeliveryPage() {
             <p className="text-base font-black text-amber-950 mt-0.5">
               {loadingStock ? '...' : `${stockSummary?.totalCooked ?? 0} L`}
             </p>
+            <p className="text-[9px] text-amber-700 font-semibold mt-0.5">Batch Hari Ini</p>
           </div>
 
           <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200">
@@ -258,6 +276,7 @@ export default function ProductionDeliveryPage() {
             <p className="text-base font-black text-slate-800 mt-0.5">
               {loadingStock ? '...' : `${stockSummary?.totalDelivered ?? 0} L`}
             </p>
+            <p className="text-[9px] text-slate-500 font-semibold mt-0.5">Ke Semua Booth</p>
           </div>
 
           <div
@@ -272,6 +291,9 @@ export default function ProductionDeliveryPage() {
             </p>
             <p className="text-base font-black mt-0.5">
               {loadingStock ? '...' : `${remainingStock} L`}
+            </p>
+            <p className={`text-[9px] font-semibold mt-0.5 ${remainingStock > 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+              Siap Dikirim
             </p>
           </div>
         </div>

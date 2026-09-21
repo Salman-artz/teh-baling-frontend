@@ -7,7 +7,7 @@ import { useGeolocation } from '@/hooks/use-geolocation';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibHourDec, getWibDateFormatted } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, RefreshCw, Package, ShieldCheck, Coffee, ChevronDown, Layers } from 'lucide-react';
+import { MapPin, Calculator, CheckCircle2, ArrowLeft, Save, RefreshCw, Package, ShieldCheck, Coffee, ChevronDown, Layers, Droplets } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
 
@@ -111,6 +111,7 @@ export default function EndShiftPage() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [salesItems, setSalesItems] = useState<ProductCupSaleItem[]>([]);
   const [cupStocks, setCupStocks] = useState<CupStockClosing[]>([]);
+  const [teaRemainingLiters, setTeaRemainingLiters] = useState('0');
   const [cashModal, setCashModal] = useState<number>(50000);
   const [cashFinal, setCashFinal] = useState('50000');
   const [notes, setNotes] = useState('');
@@ -401,6 +402,7 @@ export default function EndShiftPage() {
 
       const res = await api.post('/daily-reports/end', {
         cashFinal: finalCashNum,
+        teaRemainingLiters: parseFloat(teaRemainingLiters) || 0,
         stockItems: cupStocks.map((c) => {
           const finalVal = parseInt(c.qtyFinal, 10) || 0;
           return {
@@ -867,9 +869,75 @@ export default function EndShiftPage() {
           </div>
         </div>
 
-        {/* 3. Input Uang Fisik Kasir */}
+        {/* 3. Sisa Teh di Booth (Liter) - Stok Lanjutan untuk Dapur Besok */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <h2 className="font-bold text-slate-900 text-sm">3. Uang Fisik Akhir di Laci Kasir</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Droplets className="w-4 h-4 text-emerald-600" />
+              <h2 className="font-bold text-slate-900 text-sm">3. Sisa Teh di Booth (Liter)</h2>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+              Bawaan Stok Besok
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Masukkan sisa teh yang belum terjual di dispenser/teko booth saat tutup shift. Sisa teh ini akan otomatis menjadi stok awal di dapur pada hari esoknya.
+          </p>
+
+          <div className="space-y-2">
+            <div className="relative">
+              <input
+                type="number"
+                step="any"
+                min="0"
+                inputMode="decimal"
+                value={teaRemainingLiters}
+                onChange={(e) => setTeaRemainingLiters(e.target.value)}
+                placeholder="0"
+                className="block w-full rounded-lg border border-slate-300 p-3 pr-14 text-xl font-bold text-emerald-950 focus:border-emerald-600 focus:outline-none"
+              />
+              <span className="absolute right-3.5 top-3.5 text-xs font-bold text-slate-400">Liter</span>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] font-semibold text-slate-400 mr-1">Preset:</span>
+              <button
+                type="button"
+                onClick={() => setTeaRemainingLiters('0')}
+                className="px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-200 transition cursor-pointer"
+              >
+                Habis (0 L)
+              </button>
+              {[1, 2, 3, 5, 10].map((lit) => (
+                <button
+                  key={lit}
+                  type="button"
+                  onClick={() => {
+                    const curr = parseFloat(teaRemainingLiters) || 0;
+                    setTeaRemainingLiters(String(curr + lit));
+                  }}
+                  className="px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
+                >
+                  +{lit} L
+                </button>
+              ))}
+              {teaRemainingLiters && teaRemainingLiters !== '0' && (
+                <button
+                  type="button"
+                  onClick={() => setTeaRemainingLiters('0')}
+                  className="px-2 py-1 rounded-md text-red-600 text-xs font-bold hover:bg-red-50 transition cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Input Uang Fisik Kasir */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+          <h2 className="font-bold text-slate-900 text-sm">4. Uang Fisik Akhir di Laci Kasir</h2>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               Total Uang Kasir Fisik (Modal Shift Pagi + Omzet Penjualan)
@@ -886,11 +954,11 @@ export default function EndShiftPage() {
           </div>
         </div>
 
-        {/* 4. Rekonsiliasi Kasir & Stok Otomatis */}
+        {/* 5. Rekonsiliasi Kasir & Stok Otomatis */}
         <div className="rounded-xl border border-slate-200 bg-slate-900 p-5 text-white shadow-sm space-y-3">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
             <Calculator className="w-4 h-4 text-emerald-400" />
-            <h2 className="font-bold text-sm text-white">4. Rekonsiliasi Kasir & Stok Otomatis</h2>
+            <h2 className="font-bold text-sm text-white">5. Rekonsiliasi Kasir & Stok Otomatis</h2>
           </div>
 
           <div className="space-y-2 text-xs">
@@ -932,9 +1000,9 @@ export default function EndShiftPage() {
           </div>
         </div>
 
-        {/* 5. Catatan Operasional Shift */}
+        {/* 6. Catatan Operasional Shift */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">
-          <h2 className="font-bold text-slate-900 text-sm">5. Catatan Operasional Shift</h2>
+          <h2 className="font-bold text-slate-900 text-sm">6. Catatan Operasional Shift</h2>
           <textarea
             data-testid="shift-notes-input"
             rows={2}
@@ -945,10 +1013,10 @@ export default function EndShiftPage() {
           />
         </div>
 
-        {/* 6. Validasi Geolocation Radius 200m */}
+        {/* 7. Validasi Geolocation Radius 200m */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-slate-900 text-sm">6. Validasi Lokasi Geolocation (GPS)</h2>
+            <h2 className="font-bold text-slate-900 text-sm">7. Validasi Lokasi Geolocation (GPS)</h2>
             <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
               Maks: 200 Meter
             </span>
