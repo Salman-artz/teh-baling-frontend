@@ -143,7 +143,7 @@ export default function StartShiftPage() {
   // Bypass pembatasan jam khusus mode testing
   const isTimeValid = true;
 
-  const isAccessAllowed = hasAssignment;
+  const isAccessAllowed = hasAssignment && isTimeValid;
 
   const currentDistance =
     position && assignment?.latitude && assignment?.longitude

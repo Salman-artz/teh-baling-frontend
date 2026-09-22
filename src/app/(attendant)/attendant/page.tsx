@@ -127,8 +127,8 @@ export default function AttendantHomePage() {
   const isTimeValidForStart = true;
   const isTimeValidForEnd = true;
 
-  const canStartShift = hasAssignment && isCorrectShiftSession;
-  const canEndShift = hasAssignment && isCorrectShiftSession;
+  const canStartShift = hasAssignment && isCorrectShiftSession && isTimeValidForStart;
+  const canEndShift = hasAssignment && isCorrectShiftSession && isTimeValidForEnd;
 
   let startDisabledReason = '';
   if (!hasAssignment) {
