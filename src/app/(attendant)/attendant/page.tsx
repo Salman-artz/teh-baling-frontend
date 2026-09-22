@@ -123,11 +123,12 @@ export default function AttendantHomePage() {
   const endWindowMin = isPagi ? 9.0 : 15.0;
   const endWindowMax = isPagi ? 17.5 : 23.0;
 
-  const isTimeValidForStart = currentHourDec >= startWindowMin && currentHourDec <= startWindowMax;
-  const isTimeValidForEnd = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
+  // Bypass pembatasan jam khusus untuk mode testing (agar bisa tes mulai/tutup shift kapan saja)
+  const isTimeValidForStart = true;
+  const isTimeValidForEnd = true;
 
-  const canStartShift = hasAssignment && isCorrectShiftSession && isTimeValidForStart;
-  const canEndShift = hasAssignment && isCorrectShiftSession && isTimeValidForEnd;
+  const canStartShift = hasAssignment && isCorrectShiftSession;
+  const canEndShift = hasAssignment && isCorrectShiftSession;
 
   let startDisabledReason = '';
   if (!hasAssignment) {

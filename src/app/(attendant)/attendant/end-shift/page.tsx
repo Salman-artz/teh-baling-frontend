@@ -287,9 +287,10 @@ export default function EndShiftPage() {
   const isPagi = activeSession === 'PAGI';
   const endWindowMin = isPagi ? 9.0 : 15.0;
   const endWindowMax = isPagi ? 17.5 : 23.0;
-  const isTimeValid = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
+  // Bypass pembatasan jam khusus mode testing
+  const isTimeValid = true;
 
-  const isAccessAllowed = hasAssignment && isTimeValid;
+  const isAccessAllowed = hasAssignment;
 
   const currentDistance =
     position && assignment?.latitude && assignment?.longitude

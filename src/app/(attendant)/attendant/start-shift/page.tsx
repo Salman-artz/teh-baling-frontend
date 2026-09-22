@@ -140,9 +140,10 @@ export default function StartShiftPage() {
   const isPagi = activeSession === 'PAGI';
   const startWindowMin = isPagi ? 6.5 : 12.5;
   const startWindowMax = isPagi ? 15.0 : 20.5;
-  const isTimeValid = currentHourDec >= startWindowMin && currentHourDec <= startWindowMax;
+  // Bypass pembatasan jam khusus mode testing
+  const isTimeValid = true;
 
-  const isAccessAllowed = hasAssignment && isTimeValid;
+  const isAccessAllowed = hasAssignment;
 
   const currentDistance =
     position && assignment?.latitude && assignment?.longitude
