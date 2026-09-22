@@ -138,8 +138,8 @@ export default function StartShiftPage() {
   const hasAssignment = Boolean(assignment);
 
   const isPagi = activeSession === 'PAGI';
-  const startWindowMin = isPagi ? 7.0 : 14.0;
-  const startWindowMax = isPagi ? 16.0 : 21.0;
+  const startWindowMin = isPagi ? 6.5 : 12.5;
+  const startWindowMax = isPagi ? 15.0 : 20.5;
   const isTimeValid = currentHourDec >= startWindowMin && currentHourDec <= startWindowMax;
 
   const isAccessAllowed = hasAssignment && isTimeValid;
@@ -154,9 +154,9 @@ export default function StartShiftPage() {
   if (!hasAssignment) {
     lockedReason = `Anda tidak memiliki jadwal penugasan shift hari ini di database. Hanya staf yang ditugaskan oleh Admin yang dapat membuka shift.`;
   } else if (currentHourDec < startWindowMin) {
-    lockedReason = `Akses buka shift baru dibuka pukul ${isPagi ? '07:00' : '14:00'} WIB (2 jam sebelum jam operasional dimulai).`;
+    lockedReason = `Akses buka shift baru dibuka pukul ${isPagi ? '06:30' : '12:30'} WIB (2,5 jam sebelum jam operasional dimulai).`;
   } else if (currentHourDec > startWindowMax) {
-    lockedReason = `Waktu presensi buka shift telah ditutup (Batas maksimal pukul ${isPagi ? '16:00' : '21:00'} WIB).`;
+    lockedReason = `Waktu presensi buka shift telah ditutup (Batas maksimal pukul ${isPagi ? '15:00' : '20:30'} WIB).`;
   }
 
   const handleStockChange = (cupId: string, val: string) => {
@@ -350,7 +350,7 @@ export default function StartShiftPage() {
               <p className="mt-0.5 text-slate-700">
                 Akun: <strong className="text-slate-900">{user?.email || 'Attendant'}</strong>
                 <br />
-                Sesi Terdeteksi: <strong>Shift {isPagi ? 'Pagi (09:00 - 16:00)' : 'Sore (16:00 - 21:00)'}</strong>
+                Sesi Terdeteksi: <strong>Shift {isPagi ? 'Pagi (09:00 - 15:00)' : 'Sore (15:00 - 20:30)'}</strong>
               </p>
             </div>
           </div>

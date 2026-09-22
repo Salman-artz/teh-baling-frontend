@@ -32,20 +32,20 @@ function getDynamicShiftStatus(
 
   // 3. Tanggal hari ini -> Evaluasi berdasarkan jam shift
   if (shiftType === 'PAGI') {
-    // Shift Pagi: 09:00 s/d 16:00 WIB
+    // Shift Pagi: 09:00 s/d 15:00 WIB
     if (currentTimeDec < 9.0) {
-      return { status: 'Belum Mulai (Pagi 09:00 - 16:00)', category: 'ready' };
+      return { status: 'Belum Mulai (Pagi 09:00 - 15:00)', category: 'ready' };
     }
-    if (currentTimeDec >= 9.0 && currentTimeDec < 16.0) {
+    if (currentTimeDec >= 9.0 && currentTimeDec < 15.0) {
       return { status: 'Sedang Beroperasi (Shift Pagi)', category: 'operating' };
     }
     return { status: 'Selesai (Shift Pagi Berakhir)', category: 'completed' };
   } else {
-    // Shift Sore: 16:00 s/d 21:00 WIB
-    if (currentTimeDec < 16.0) {
-      return { status: 'Belum Mulai (Sore 16:00 - 21:00)', category: 'ready' };
+    // Shift Sore: 15:00 s/d 20:30 WIB
+    if (currentTimeDec < 15.0) {
+      return { status: 'Belum Mulai (Sore 15:00 - 20:30)', category: 'ready' };
     }
-    if (currentTimeDec >= 16.0 && currentTimeDec < 21.0) {
+    if (currentTimeDec >= 15.0 && currentTimeDec < 20.5) {
       return { status: 'Sedang Beroperasi (Shift Sore)', category: 'operating' };
     }
     return { status: 'Selesai (Shift Sore Berakhir)', category: 'completed' };
@@ -179,7 +179,7 @@ export default function AssignmentsPage() {
     const headers = ['No', 'Tanggal Shift', 'Sesi Shift', 'Jam Operasional', 'Nama Booth', 'Staf Bertugas', 'Ditugaskan Oleh', 'Status Shift'];
     const rows = dataToExport.map((item, idx) => {
       const evalStatus = getDynamicShiftStatus(item.date, item.shiftType, item.status);
-      const shiftHours = item.shiftType === 'PAGI' ? '09:00 - 16:00 WIB' : '16:00 - 21:00 WIB';
+      const shiftHours = item.shiftType === 'PAGI' ? '09:00 - 15:00 WIB' : '15:00 - 20:30 WIB';
       return [
         idx + 1,
         `"${item.date}"`,
@@ -434,8 +434,8 @@ export default function AssignmentsPage() {
             className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 text-slate-800 font-semibold focus:border-emerald-600 focus:outline-none bg-white"
           >
             <option value="ALL">Semua Sesi Shift</option>
-            <option value="PAGI">🌅 Shift Pagi (09:00 - 16:00)</option>
-            <option value="SORE">🌇 Shift Sore (16:00 - 21:00)</option>
+            <option value="PAGI">🌅 Shift Pagi (09:00 - 15:00)</option>
+            <option value="SORE">🌇 Shift Sore (15:00 - 20:30)</option>
           </select>
         </div>
       </div>
@@ -483,8 +483,8 @@ export default function AssignmentsPage() {
               onChange={(e) => setShiftType(e.target.value as ShiftType)}
               className="mt-1 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none font-medium bg-white"
             >
-              <option value="PAGI">🌅 Pagi (09:00 - 16:00 WIB)</option>
-              <option value="SORE">🌇 Sore (16:00 - 21:00 WIB)</option>
+              <option value="PAGI">🌅 Pagi (09:00 - 15:00 WIB)</option>
+              <option value="SORE">🌇 Sore (15:00 - 20:30 WIB)</option>
             </select>
           </div>
 
@@ -586,7 +586,7 @@ export default function AssignmentsPage() {
                             }`}
                           >
                             {isPagi ? <Sun className="w-3.5 h-3.5 text-amber-600" /> : <Sunset className="w-3.5 h-3.5 text-indigo-600" />}
-                            {isPagi ? 'Shift Pagi (09:00 - 16:00)' : 'Shift Sore (16:00 - 21:00)'}
+                            {isPagi ? 'Shift Pagi (09:00 - 15:00)' : 'Shift Sore (15:00 - 20:30)'}
                           </span>
                         </td>
                         <td className="px-5 py-4 font-semibold text-slate-900 whitespace-nowrap">

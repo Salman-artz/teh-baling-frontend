@@ -285,8 +285,8 @@ export default function EndShiftPage() {
   const hasAssignment = Boolean(assignment);
 
   const isPagi = activeSession === 'PAGI';
-  const endWindowMin = isPagi ? 9.0 : 16.0;
-  const endWindowMax = isPagi ? 18.0 : 23.0;
+  const endWindowMin = isPagi ? 9.0 : 15.0;
+  const endWindowMax = isPagi ? 17.5 : 23.0;
   const isTimeValid = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
 
   const isAccessAllowed = hasAssignment && isTimeValid;
@@ -301,9 +301,9 @@ export default function EndShiftPage() {
   if (!hasAssignment) {
     lockedReason = `Anda tidak memiliki jadwal penugasan shift hari ini di database. Hanya staf yang ditugaskan oleh Admin yang dapat menutup shift kasir.`;
   } else if (currentHourDec < endWindowMin) {
-    lockedReason = `Akses tutup shift baru dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '16:00'} WIB).`;
+    lockedReason = `Akses tutup shift baru dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '15:00'} WIB).`;
   } else if (currentHourDec > endWindowMax) {
-    lockedReason = `Batas waktu toleransi pengisian tutup shift telah berakhir (Maksimal pukul ${isPagi ? '18:00' : '23:00'} WIB / 2 jam setelah outlet tutup).`;
+    lockedReason = `Batas waktu toleransi pengisian tutup shift telah berakhir (Maksimal pukul ${isPagi ? '17:30' : '23:00'} WIB / 2,5 jam setelah outlet tutup).`;
   }
 
   // Auto Calculations

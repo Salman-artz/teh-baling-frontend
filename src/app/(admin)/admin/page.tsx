@@ -576,12 +576,12 @@ export default function AdminDashboardPage() {
                           {booth.shiftType === 'SORE' ? (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
                               <span>🌅</span>
-                              <span>Shift Sore (16:00 - 21:00)</span>
+                              <span>Shift Sore (15:00 - 20:30)</span>
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800 border border-sky-200">
                               <span>☀️</span>
-                              <span>Shift Pagi (09:00 - 16:00)</span>
+                              <span>Shift Pagi (09:00 - 15:00)</span>
                             </span>
                           )}
                         </td>

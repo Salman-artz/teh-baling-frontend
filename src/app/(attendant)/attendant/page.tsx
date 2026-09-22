@@ -112,16 +112,16 @@ export default function AttendantHomePage() {
   const assignedShift = assignment?.shiftType || 'PAGI';
   const isCorrectShiftSession = !assignment || assignment.shiftType === activeSession;
 
-  // Evaluasi Rule Akses Window Shift:
-  // - Shift Pagi (09:00 - 16:00 WIB) -> Start: 07:00-16:00 | End: 09:00-18:00
-  // - Shift Sore (16:00 - 21:00 WIB) -> Start: 14:00-21:00 | End: 16:00-23:00
+  // Evaluasi Rule Akses Window Shift (+- 2,5 jam toleransi):
+  // - Shift Pagi (09:00 - 15:00 WIB) -> Start: 06:30-15:00 | End: 09:00-17:30
+  // - Shift Sore (15:00 - 20:30 WIB) -> Start: 12:30-20:30 | End: 15:00-23:00
   const currentHourDec = getWibHourDec();
 
   const isPagi = activeSession === 'PAGI';
-  const startWindowMin = isPagi ? 7.0 : 14.0;
-  const startWindowMax = isPagi ? 16.0 : 21.0;
-  const endWindowMin = isPagi ? 9.0 : 16.0;
-  const endWindowMax = isPagi ? 18.0 : 23.0;
+  const startWindowMin = isPagi ? 6.5 : 12.5;
+  const startWindowMax = isPagi ? 15.0 : 20.5;
+  const endWindowMin = isPagi ? 9.0 : 15.0;
+  const endWindowMax = isPagi ? 17.5 : 23.0;
 
   const isTimeValidForStart = currentHourDec >= startWindowMin && currentHourDec <= startWindowMax;
   const isTimeValidForEnd = currentHourDec >= endWindowMin && currentHourDec <= endWindowMax;
@@ -133,22 +133,22 @@ export default function AttendantHomePage() {
   if (!hasAssignment) {
     startDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift hari ini di database.`;
   } else if (!isCorrectShiftSession) {
-    startDisabledReason = `Akses Terkunci: Anda dijadwalkan pada Shift ${assignedShift === 'PAGI' ? 'PAGI (09:00 - 16:00)' : 'SORE (16:00 - 21:00)'}. Silakan klik tab Shift ${assignedShift === 'PAGI' ? 'Pagi' : 'Sore'} di atas.`;
+    startDisabledReason = `Akses Terkunci: Anda dijadwalkan pada Shift ${assignedShift === 'PAGI' ? 'PAGI (09:00 - 15:00)' : 'SORE (15:00 - 20:30)'}. Silakan klik tab Shift ${assignedShift === 'PAGI' ? 'Pagi' : 'Sore'} di atas.`;
   } else if (currentHourDec < startWindowMin) {
-    startDisabledReason = `Akses buka shift dibuka mulai pukul ${isPagi ? '07:00' : '14:00'} WIB (2 jam sebelum shift).`;
+    startDisabledReason = `Akses buka shift dibuka mulai pukul ${isPagi ? '06:30' : '12:30'} WIB (2,5 jam sebelum shift).`;
   } else if (currentHourDec > startWindowMax) {
-    startDisabledReason = `Waktu presensi buka shift telah berakhir (Maksimal pukul ${isPagi ? '16:00' : '21:00'} WIB).`;
+    startDisabledReason = `Waktu presensi buka shift telah berakhir (Maksimal pukul ${isPagi ? '15:00' : '20:30'} WIB).`;
   }
 
   let endDisabledReason = '';
   if (!hasAssignment) {
     endDisabledReason = `Akses Terkunci: Anda tidak memiliki jadwal penugasan shift hari ini di database.`;
   } else if (!isCorrectShiftSession) {
-    endDisabledReason = `Akses Terkunci: Anda dijadwalkan pada Shift ${assignedShift === 'PAGI' ? 'PAGI (09:00 - 16:00)' : 'SORE (16:00 - 21:00)'}. Silakan klik tab Shift ${assignedShift === 'PAGI' ? 'Pagi' : 'Sore'} di atas.`;
+    endDisabledReason = `Akses Terkunci: Anda dijadwalkan pada Shift ${assignedShift === 'PAGI' ? 'PAGI (09:00 - 15:00)' : 'SORE (15:00 - 20:30)'}. Silakan klik tab Shift ${assignedShift === 'PAGI' ? 'Pagi' : 'Sore'} di atas.`;
   } else if (currentHourDec < endWindowMin) {
-    endDisabledReason = `Akses tutup shift dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '16:00'} WIB).`;
+    endDisabledReason = `Akses tutup shift dibuka saat jam shift berjalan (mulai pukul ${isPagi ? '09:00' : '15:00'} WIB).`;
   } else if (currentHourDec > endWindowMax) {
-    endDisabledReason = `Waktu tutup shift kasir telah lewat (Toleransi maksimal pukul ${isPagi ? '18:00' : '23:00'} WIB).`;
+    endDisabledReason = `Waktu tutup shift kasir telah lewat (Toleransi maksimal pukul ${isPagi ? '17:30' : '23:00'} WIB / 2,5 jam setelah shift berakhir).`;
   }
 
 
@@ -207,7 +207,7 @@ export default function AttendantHomePage() {
               }`}
             >
               <Sun className="w-3.5 h-3.5" />
-              Shift Pagi (09:00 - 16:00)
+              Shift Pagi (09:00 - 15:00)
             </button>
             <button
               onClick={() => setActiveSession('SORE')}
@@ -218,7 +218,7 @@ export default function AttendantHomePage() {
               }`}
             >
               <Sunset className="w-3.5 h-3.5" />
-              Shift Sore (16:00 - 21:00)
+              Shift Sore (15:00 - 20:30)
             </button>
           </div>
 
@@ -252,18 +252,18 @@ export default function AttendantHomePage() {
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900 space-y-1.5 shadow-xs">
           <div className="flex items-center gap-1.5 font-bold text-blue-950 text-sm">
             <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
-            Aturan Waktu Pengisian Shift {isPagi ? 'Pagi' : 'Sore'}:
+            Aturan Waktu Pengisian Shift {isPagi ? 'Pagi (09:00 - 15:00)' : 'Sore (15:00 - 20:30)'}:
           </div>
           <ul className="list-disc list-inside space-y-1 text-slate-700 leading-relaxed pl-1">
             <li>
               <strong>Buka Shift:</strong> Dapat diisi mulai pukul{' '}
-              <span className="font-bold text-emerald-800">{isPagi ? '07:00' : '14:00'} WIB</span> (2 jam sebelum shift) hingga pukul{' '}
-              <span className="font-bold text-emerald-800">{isPagi ? '16:00' : '21:00'} WIB</span>.
+              <span className="font-bold text-emerald-800">{isPagi ? '06:30' : '12:30'} WIB</span> (2,5 jam sebelum shift) hingga pukul{' '}
+              <span className="font-bold text-emerald-800">{isPagi ? '15:00' : '20:30'} WIB</span>.
             </li>
             <li>
               <strong>Tutup Shift:</strong> Dapat diisi mulai pukul{' '}
-              <span className="font-bold text-indigo-800">{isPagi ? '09:00' : '16:00'} WIB</span> hingga batas maksimal pukul{' '}
-              <span className="font-bold text-indigo-800">{isPagi ? '18:00' : '23:00'} WIB</span> (toleransi 2 jam setelah shift).
+              <span className="font-bold text-indigo-800">{isPagi ? '09:00' : '15:00'} WIB</span> hingga batas maksimal pukul{' '}
+              <span className="font-bold text-indigo-800">{isPagi ? '17:30' : '23:00'} WIB</span> (toleransi 2,5 jam setelah shift).
             </li>
             <li>
               <strong>Radius Lokasi GPS:</strong> Presensi kehadiran wajib berada dalam batas radius maksimal <span className="font-bold text-emerald-800">200 meter</span> dari titik koordinat booth.
