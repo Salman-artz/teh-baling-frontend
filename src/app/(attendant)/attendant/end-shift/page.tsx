@@ -69,6 +69,7 @@ interface CupStockClosing {
   cupTypeId: string;
   cupTypeName: string;
   qtyInitial: number;
+  qtyAdded: number;
   qtyFinal: string;
 }
 
@@ -84,7 +85,7 @@ interface TodayReportData {
   notes?: string | null;
   gpsTimeStart?: string | null;
   gpsTimeEnd?: string | null;
-  stockItems?: { cupTypeId: string; qtyInitial: number; qtySold?: number }[];
+  stockItems?: { cupTypeId: string; qtyInitial: number; qtyAdded?: number; qtySold?: number }[];
   saleItems?: { productId: string; cupTypeId?: string; qtySold: number; priceSnapshot?: number }[];
 }
 
@@ -150,6 +151,7 @@ export default function EndShiftPage() {
         }
 
         const initialStockMap: Record<string, number> = {};
+        const addedStockMap: Record<string, number> = {};
         let modalFromReport = 50000;
 
         if (reportRes.success && reportRes.data) {
@@ -161,6 +163,7 @@ export default function EndShiftPage() {
           if (Array.isArray(reportRes.data.stockItems)) {
             reportRes.data.stockItems.forEach((s) => {
               initialStockMap[s.cupTypeId] = s.qtyInitial;
+              addedStockMap[s.cupTypeId] = s.qtyAdded || 0;
             });
           }
         }
@@ -260,11 +263,14 @@ export default function EndShiftPage() {
         // Inisialisasi stok closing cup (hanya cup aktif)
         const closings: CupStockClosing[] = activeCups.map((c) => {
           const initial = initialStockMap[c.id] !== undefined ? initialStockMap[c.id] : 50;
+          const added = addedStockMap[c.id] !== undefined ? addedStockMap[c.id] : 0;
+          const totalAvailable = initial + added;
           return {
             cupTypeId: c.id,
             cupTypeName: c.name,
             qtyInitial: initial,
-            qtyFinal: String(initial),
+            qtyAdded: added,
+            qtyFinal: String(totalAvailable),
           };
         });
         setCupStocks(closings);
@@ -322,7 +328,8 @@ export default function EndShiftPage() {
 
   const totalCupsUsed = cupStocks.reduce((sum, c) => {
     const finalVal = parseInt(c.qtyFinal, 10) || 0;
-    return sum + Math.max(0, c.qtyInitial - finalVal);
+    const totalAvailable = c.qtyInitial + (c.qtyAdded || 0);
+    return sum + Math.max(0, totalAvailable - finalVal);
   }, 0);
   const cupVariance = totalCupsUsed - totalProductsSold;
 
@@ -346,20 +353,16 @@ export default function EndShiftPage() {
     setExpandedSeries({});
   };
 
-  const handleQtyChange = (itemId: string, qtyStr: string) => {
-    const qty = parseInt(qtyStr, 10);
-    const validQty = isNaN(qty) ? 0 : Math.max(0, qty);
-    setSalesItems((prev) => {
-      const updated = prev.map((item) => (item.id === itemId ? { ...item, qtySold: validQty } : item));
-      const newRev = updated.reduce((acc, it) => acc + it.price * it.qtySold, 0);
-      setCashFinal(String(cashModal + newRev));
-      return updated;
-    });
+  const handleQtyChange = (itemId: string, val: string) => {
+    const num = parseInt(val, 10) || 0;
+    setSalesItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, qtySold: Math.max(0, num) } : item))
+    );
   };
 
-  const handleCupFinalChange = (cupTypeId: string, valStr: string) => {
+  const handleCupFinalChange = (cupTypeId: string, val: string) => {
     setCupStocks((prev) =>
-      prev.map((c) => (c.cupTypeId === cupTypeId ? { ...c, qtyFinal: valStr } : c))
+      prev.map((c) => (c.cupTypeId === cupTypeId ? { ...c, qtyFinal: val } : c))
     );
   };
 
@@ -370,8 +373,8 @@ export default function EndShiftPage() {
       return;
     }
 
-    if (todayReport?.status === 'CLOSED') {
-      setError('Shift hari ini sudah ditutup dan laporan closing telah dikunci. Anda tidak dapat mengirim laporan ulang.');
+    if (todayReport && todayReport.status === 'CLOSED') {
+      setError('Shift hari ini sudah ditutup dan difinalisasi.');
       return;
     }
 
@@ -406,11 +409,13 @@ export default function EndShiftPage() {
         teaRemainingLiters: parseFloat(teaRemainingLiters) || 0,
         stockItems: cupStocks.map((c) => {
           const finalVal = parseInt(c.qtyFinal, 10) || 0;
+          const totalAvailable = c.qtyInitial + (c.qtyAdded || 0);
           return {
             cupTypeId: c.cupTypeId,
             qtyInitial: c.qtyInitial,
+            qtyAdded: c.qtyAdded || 0,
             qtyFinal: finalVal,
-            qtySold: Math.max(0, c.qtyInitial - finalVal),
+            qtySold: Math.max(0, totalAvailable - finalVal),
           };
         }),
         saleItems: activeSales,
@@ -810,7 +815,8 @@ export default function EndShiftPage() {
             ) : (
               cupStocks.map((c) => {
                 const finalNum = parseInt(c.qtyFinal, 10) || 0;
-                const used = Math.max(0, c.qtyInitial - finalNum);
+                const totalAvailable = c.qtyInitial + (c.qtyAdded || 0);
+                const used = Math.max(0, totalAvailable - finalNum);
                 const soldFromMenu = cupsSoldMap[c.cupTypeId] || 0;
                 const diff = used - soldFromMenu;
 
@@ -821,9 +827,16 @@ export default function EndShiftPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-xs text-slate-900">{c.cupTypeName}</span>
-                      <span className="text-[11px] text-slate-500">
-                        Awal: <strong className="text-slate-800">{c.qtyInitial}</strong> | Terjual Menu: <strong className="text-emerald-700">{soldFromMenu}</strong>
-                      </span>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                        <span>Awal: <strong className="text-slate-800">{c.qtyInitial}</strong></span>
+                        {c.qtyAdded > 0 && (
+                          <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-bold border border-emerald-200">
+                            +{c.qtyAdded} Restock
+                          </span>
+                        )}
+                        <span>Total: <strong className="text-slate-900">{totalAvailable}</strong></span>
+                        <span>| Menu: <strong className="text-emerald-700">{soldFromMenu}</strong></span>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">

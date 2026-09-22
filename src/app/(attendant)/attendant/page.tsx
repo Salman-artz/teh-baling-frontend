@@ -17,6 +17,9 @@ import {
   Lock,
   UserX,
   CheckCircle2,
+  Package,
+  PlusCircle,
+  X,
 } from 'lucide-react';
 
 type ShiftSession = 'PAGI' | 'SORE';
@@ -34,6 +37,13 @@ interface AssignmentData {
   status: string;
 }
 
+interface CupTypeOption {
+  id: string;
+  name: string;
+  price: number;
+  isActive?: boolean;
+}
+
 interface TodayReportData {
   id: string;
   boothId: string;
@@ -44,6 +54,7 @@ interface TodayReportData {
   cashFinal?: number | null;
   status: string;
   gpsTimeStart?: string | null;
+  stockItems?: { cupTypeId: string; qtyInitial: number; qtyAdded?: number; qtySold?: number }[];
 }
 
 export default function AttendantHomePage() {
@@ -54,6 +65,30 @@ export default function AttendantHomePage() {
   const [assignment, setAssignment] = useState<AssignmentData | null>(null);
   const [todayReport, setTodayReport] = useState<TodayReportData | null>(null);
   const [loadingAssignment, setLoadingAssignment] = useState(false);
+
+  // Modal Restock Cups State
+  const [cupTypes, setCupTypes] = useState<CupTypeOption[]>([]);
+  const [showRestockModal, setShowRestockModal] = useState(false);
+  const [selectedCupId, setSelectedCupId] = useState('');
+  const [restockQty, setRestockQty] = useState('');
+  const [restockNotes, setRestockNotes] = useState('');
+  const [restockLoading, setRestockLoading] = useState(false);
+  const [restockMessage, setRestockMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchCupTypes = useCallback(async () => {
+    try {
+      const res = await api.get<CupTypeOption[]>('/cup-types');
+      if (res.success && Array.isArray(res.data)) {
+        const active = res.data.filter((c) => c.isActive !== false);
+        setCupTypes(active);
+        if (active.length > 0) {
+          setSelectedCupId(active[0].id);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchTodayAssignment = useCallback(async () => {
     setLoadingAssignment(true);
@@ -97,6 +132,7 @@ export default function AttendantHomePage() {
 
   useEffect(() => {
     fetchTodayAssignment();
+    fetchCupTypes();
 
     const updateTime = () => {
       setWibTimeStr(getWibTimeString());
@@ -106,7 +142,47 @@ export default function AttendantHomePage() {
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [fetchTodayAssignment]);
+  }, [fetchTodayAssignment, fetchCupTypes]);
+
+  const handleRestockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRestockMessage(null);
+    const qty = parseInt(restockQty, 10);
+    if (isNaN(qty) || qty <= 0) {
+      setRestockMessage({ type: 'error', text: 'Jumlah penambahan cup wajib lebih besar dari 0' });
+      return;
+    }
+    if (!selectedCupId) {
+      setRestockMessage({ type: 'error', text: 'Pilih ukuran cup yang akan ditambahkan' });
+      return;
+    }
+
+    setRestockLoading(true);
+    try {
+      const res = await api.post('/daily-reports/restock-cups', {
+        cupTypeId: selectedCupId,
+        qtyAdded: qty,
+        notes: restockNotes.trim() || undefined,
+      });
+
+      if (res.success) {
+        setRestockMessage({ type: 'success', text: `✓ Berhasil menambahkan ${qty} cup!` });
+        setRestockQty('');
+        setRestockNotes('');
+        await fetchTodayAssignment();
+        setTimeout(() => {
+          setShowRestockModal(false);
+          setRestockMessage(null);
+        }, 1200);
+      } else {
+        setRestockMessage({ type: 'error', text: res.error?.message || 'Gagal menambahkan cup' });
+      }
+    } catch {
+      setRestockMessage({ type: 'error', text: 'Terjadi gangguan jaringan atau server' });
+    } finally {
+      setRestockLoading(false);
+    }
+  };
 
   const hasAssignment = Boolean(assignment);
   const assignedShift = assignment?.shiftType || 'PAGI';
@@ -364,7 +440,34 @@ export default function AttendantHomePage() {
             </div>
           )}
 
-          {/* Tombol 2: Akhiri Shift */}
+          {/* Tombol 2: Tambah Cup di Tengah Shift (Restock) - Aktif saat status OPEN */}
+          {todayReport?.status === 'OPEN' && (
+            <button
+              type="button"
+              onClick={() => setShowRestockModal(true)}
+              className="w-full flex items-center justify-between p-4 rounded-xl border border-amber-300 bg-amber-50/80 hover:bg-amber-100 transition group shadow-xs text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                  <Package className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-slate-900 text-sm">+ Tambah Stok Cup (Restock)</p>
+                    <span className="text-[10px] font-bold text-amber-900 bg-amber-200/80 px-1.5 py-0.5 rounded">
+                      Penjualan Berjalan
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Input cup tambahan jika dapat kiriman/beli darurat di tengah jualan
+                  </p>
+                </div>
+              </div>
+              <PlusCircle className="w-5 h-5 text-amber-700 group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+
+          {/* Tombol 3: Akhiri Shift */}
           {todayReport?.status === 'CLOSED' ? (
             <Link
               href="/attendant/end-shift"
@@ -376,7 +479,7 @@ export default function AttendantHomePage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <p className="font-bold text-slate-900 text-sm">2. Tutup Shift (Closing Selesai)</p>
+                    <p className="font-bold text-slate-900 text-sm">3. Tutup Shift (Closing Selesai)</p>
                     <span className="text-[10px] font-bold text-indigo-900 bg-indigo-200/70 px-1.5 py-0.5 rounded">✓ Final</span>
                   </div>
                   <p className="text-xs text-slate-600">
@@ -396,7 +499,7 @@ export default function AttendantHomePage() {
                   <StopCircle className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="font-bold text-slate-900 text-sm">2. Akhiri Shift Harian</p>
+                  <p className="font-bold text-slate-900 text-sm">3. Akhiri Shift Harian</p>
                   <p className="text-xs text-slate-500">Input penjualan produk, sisa cup & uang akhir (Akses Terbuka)</p>
                 </div>
               </div>
@@ -409,7 +512,7 @@ export default function AttendantHomePage() {
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-bold text-slate-600 text-sm">2. Akhiri Shift Harian (Terkunci)</p>
+                  <p className="font-bold text-slate-600 text-sm">3. Akhiri Shift Harian (Terkunci)</p>
                   <p className="text-[11px] text-red-700 font-medium">{endDisabledReason}</p>
                 </div>
               </div>
@@ -417,6 +520,113 @@ export default function AttendantHomePage() {
           )}
         </div>
       </div>
+
+      {/* Modal Restock Cups */}
+      {showRestockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-amber-600" />
+                <h3 className="text-base font-bold text-slate-900">Tambah Stok Cup (Restock)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRestockModal(false);
+                  setRestockMessage(null);
+                }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {restockMessage && (
+              <div
+                className={`p-3 rounded-xl text-xs font-semibold ${
+                  restockMessage.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {restockMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleRestockSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Pilih Ukuran Cup (Data DB)</label>
+                <select
+                  value={selectedCupId}
+                  onChange={(e) => setSelectedCupId(e.target.value)}
+                  required
+                  disabled={restockLoading}
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-semibold text-slate-900 focus:border-amber-600 focus:outline-none bg-white"
+                >
+                  {cupTypes.length === 0 ? (
+                    <option value="">Memuat ukuran cup dari database...</option>
+                  ) : (
+                    cupTypes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Jumlah Cup Tambahan (Pcs)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    inputMode="numeric"
+                    value={restockQty}
+                    onChange={(e) => setRestockQty(e.target.value)}
+                    placeholder="misal: 50"
+                    required
+                    disabled={restockLoading}
+                    className="w-full rounded-xl border border-slate-300 p-2.5 pr-12 text-lg font-black text-amber-950 focus:border-amber-600 focus:outline-none"
+                  />
+                  <span className="absolute right-3.5 top-3 font-bold text-slate-400 text-xs">Pcs</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Catatan Tambahan (Opsional)</label>
+                <input
+                  type="text"
+                  value={restockNotes}
+                  onChange={(e) => setRestockNotes(e.target.value)}
+                  placeholder="misal: Kiriman jerigen + cup dari Mas Joko / Beli toko plastik"
+                  disabled={restockLoading}
+                  className="w-full rounded-xl border border-slate-300 p-2 text-xs text-slate-800 focus:border-amber-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRestockModal(false)}
+                  disabled={restockLoading}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={restockLoading}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-700 text-white font-bold hover:bg-amber-800 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {restockLoading ? 'Menyimpan...' : 'Simpan Restock'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
