@@ -254,24 +254,24 @@ export default function AssignmentsPage() {
     const boothObj = boothOptions.find((b) => b.id === boothId);
     const userObj = userOptions.find((u) => u.id === userId);
 
-    // Validasi Aturan 1: Tidak boleh ada 2 shift di satu booth yang sama pada tanggal yang sama
+    // Validasi Aturan 1: Tidak boleh ada 2 orang di shift yang sama pada booth dan tanggal yang sama
     const duplicateBooth = assignments.find(
-      (a) => a.date === date && a.boothId === boothId && a.id !== editingId
+      (a) => a.date === date && a.boothId === boothId && (a.shiftType || 'PAGI') === shiftType && a.id !== editingId
     );
     if (duplicateBooth) {
       setError(
-        `Akses Ditolak: Booth "${boothObj?.name || 'Booth'}" sudah memiliki penugasan shift pada tanggal ${date}. Tidak boleh ada 2 shift di satu booth yang sama.`
+        `Akses Ditolak: Booth "${boothObj?.name || 'Booth'}" sudah memiliki penugasan untuk Shift ${shiftType === 'PAGI' ? 'Pagi (09:00 - 15:00)' : 'Sore (15:00 - 20:30)'} pada tanggal ${date}. 1 shift hanya boleh diisi 1 orang.`
       );
       return;
     }
 
-    // Validasi Aturan 2: Staf tidak boleh ditugaskan di 2 booth berbeda pada tanggal yang sama
+    // Validasi Aturan 2: Staf tidak boleh ditugaskan di 2 booth berbeda pada shift yang sama di tanggal yang sama
     const duplicateUser = assignments.find(
-      (a) => a.date === date && a.userId === userId && a.id !== editingId
+      (a) => a.date === date && a.userId === userId && (a.shiftType || 'PAGI') === shiftType && a.id !== editingId
     );
     if (duplicateUser) {
       setError(
-        `Staf "${userObj?.name || 'Staf'}" sudah memiliki jadwal penugasan booth lain pada tanggal ${date}.`
+        `Akses Ditolak: Staf "${userObj?.name || 'Staf'}" sudah memiliki jadwal penugasan di booth lain untuk Shift ${shiftType === 'PAGI' ? 'Pagi' : 'Sore'} pada tanggal ${date}.`
       );
       return;
     }
