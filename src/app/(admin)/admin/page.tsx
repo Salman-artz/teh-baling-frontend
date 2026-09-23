@@ -210,7 +210,7 @@ export default function AdminDashboardPage() {
           <p data-testid="total-revenue" className="mt-2 text-3xl font-bold text-slate-900">
             {formatRupiah(dashboardData.totalRevenue)}
           </p>
-          <p className="mt-1 text-xs text-emerald-600 font-semibold">● Data real dari closing booth</p>
+          <p className="mt-1 text-xs text-emerald-600 font-semibold">● Terkalkulasi dari closing booth</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

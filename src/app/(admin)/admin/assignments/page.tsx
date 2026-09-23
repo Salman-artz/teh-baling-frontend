@@ -489,7 +489,7 @@ export default function AssignmentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Booth (Data Real)</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500">Pilih Booth</label>
             <select
               data-testid="assignment-booth-select"
               value={boothId}
