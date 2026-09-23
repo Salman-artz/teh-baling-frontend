@@ -30,7 +30,7 @@ const navItems = [
   { label: 'Jadwal Shift', href: '/admin/assignments', icon: CalendarDays },
   { label: 'Laporan Produksi', href: '/admin/production', icon: Flame },
   { label: 'Laporan Pengiriman', href: '/admin/deliveries', icon: Truck },
-  { label: 'Ringkasan & Export', href: '/admin/summary', icon: FileSpreadsheet },
+  { label: 'Laporan Penjualan', href: '/admin/summary', icon: FileSpreadsheet },
   { label: 'User Management', href: '/admin/users', icon: Users },
 ];
 
