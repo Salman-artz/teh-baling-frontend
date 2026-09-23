@@ -415,6 +415,7 @@ export default function EndShiftPage() {
           productId: s.productId,
           cupTypeId: s.cupTypeId,
           qtySold: s.qtySold,
+          priceSnapshot: Number(s.price) || 0,
         }));
 
       const res = await api.post('/daily-reports/end', {
