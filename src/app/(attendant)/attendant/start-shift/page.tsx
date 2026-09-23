@@ -142,14 +142,24 @@ export default function StartShiftPage() {
   const startWindowMax = isPagi ? 15.0 : 20.5;
   // Bypass pembatasan jam khusus mode testing
   const isTimeValid = true;
-
   const isAccessAllowed = hasAssignment && isTimeValid;
 
-  const currentDistance =
+  const KRAS_CENTRAL_LAT = -7.9546871;
+  const KRAS_CENTRAL_LNG = 111.9627637;
+
+  const distanceToBooth =
     position && assignment?.latitude && assignment?.longitude
       ? calculateDistanceMeters(assignment.latitude, assignment.longitude, position.latitude, position.longitude)
       : null;
-  const isWithinRadius = currentDistance !== null ? currentDistance <= 200 : true;
+
+  const distanceToKras =
+    position
+      ? calculateDistanceMeters(KRAS_CENTRAL_LAT, KRAS_CENTRAL_LNG, position.latitude, position.longitude)
+      : null;
+
+  const isAtBooth = distanceToBooth !== null ? distanceToBooth <= 200 : false;
+  const isAtKras = distanceToKras !== null ? distanceToKras <= 200 : false;
+  const isWithinRadius = distanceToBooth === null && distanceToKras === null ? true : isAtBooth || isAtKras;
 
   let lockedReason = '';
   if (!hasAssignment) {
@@ -181,8 +191,10 @@ export default function StartShiftPage() {
       return;
     }
 
-    if (currentDistance !== null && currentDistance > 200) {
-      setError(`Akses Ditolak: Lokasi Anda saat ini (${Math.round(currentDistance)} meter) berada di luar batas radius maksimal 200 meter dari ${assignment?.boothName || 'booth'}. Anda tidak dapat memulai shift di luar radius.`);
+    if (!isWithinRadius) {
+      setError(
+        `Akses Ditolak: Lokasi Anda saat ini berada di luar batas radius 200 meter dari ${assignment?.boothName || 'booth'} (${Math.round(distanceToBooth || 0)} meter) maupun Pusat Produksi Kras (${Math.round(distanceToKras || 0)} meter). Anda tidak dapat memulai shift di luar radius.`
+      );
       return;
     }
 
@@ -456,15 +468,27 @@ export default function StartShiftPage() {
             {gpsLoading ? 'Mendeteksi Lokasi...' : '📍 Deteksi Lokasi Sekarang'}
           </button>
 
-          {position && currentDistance !== null && (
+          {position && (distanceToBooth !== null || distanceToKras !== null) && (
             <div className={`rounded-lg p-3 text-xs border ${
               isWithinRadius
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
                 : 'bg-red-50 border-red-300 text-red-900'
             }`}>
               <div className="flex items-center justify-between font-bold">
-                <span>{isWithinRadius ? '✓ Lokasi Sesuai (Dalam Radius)' : '⚠️ Di Luar Radius 200m!'}</span>
-                <span className="font-mono">{Math.round(currentDistance)} meter dari booth</span>
+                <span>
+                  {isAtBooth
+                    ? `✓ Lokasi Sesuai (Radius Booth ${assignment?.boothName || ''})`
+                    : isAtKras
+                    ? '✓ Lokasi Sesuai (Radius Pusat Produksi Kras)'
+                    : '⚠️ Di Luar Radius 200m!'}
+                </span>
+                <span className="font-mono">
+                  {isAtBooth
+                    ? `${Math.round(distanceToBooth || 0)}m dari booth`
+                    : isAtKras
+                    ? `${Math.round(distanceToKras || 0)}m dari pusat Kras`
+                    : `${Math.round(distanceToBooth || 0)}m (booth) / ${Math.round(distanceToKras || 0)}m (Kras)`}
+                </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-600">
                 Akurasi GPS Perangkat: ±{Math.round(position.accuracy)}m ({position.latitude.toFixed(6)}, {position.longitude.toFixed(6)})
@@ -472,7 +496,7 @@ export default function StartShiftPage() {
             </div>
           )}
 
-          {position && currentDistance === null && (
+          {position && distanceToBooth === null && distanceToKras === null && (
             <p data-testid="gps-status" className="text-xs text-emerald-600 font-semibold">
               ✓ Lokasi Terdeteksi (Akurasi: {Math.round(position.accuracy)}m)
             </p>
@@ -496,11 +520,11 @@ export default function StartShiftPage() {
           <button
             type="submit"
             data-testid="start-shift-submit-btn"
-            disabled={submitting || (currentDistance !== null && currentDistance > 200)}
+            disabled={submitting || (position !== null && !isWithinRadius)}
             className="flex-1 rounded-xl bg-emerald-700 py-3.5 text-base font-bold text-white shadow-md hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             <Save className="w-5 h-5" />
-            {submitting ? 'Menyimpan...' : currentDistance !== null && currentDistance > 200 ? '⚠️ Lokasi di Luar Radius (Terkunci)' : 'Simpan & Mulai Shift (Kunci)'}
+            {submitting ? 'Menyimpan...' : (position !== null && !isWithinRadius) ? '⚠️ Lokasi di Luar Radius (Terkunci)' : 'Simpan & Mulai Shift (Kunci)'}
           </button>
         </div>
       </form>
