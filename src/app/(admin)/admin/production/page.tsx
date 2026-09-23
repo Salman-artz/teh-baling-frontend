@@ -14,6 +14,7 @@ import {
   Flame,
   FileSpreadsheet,
   Search,
+  Droplets,
 } from 'lucide-react';
 
 interface CookingRecord {
@@ -26,6 +27,18 @@ interface CookingRecord {
   liters: number;
   notes: string;
   status: string;
+}
+
+interface StockSummary {
+  date: string;
+  yesterdayDate: string;
+  initialStock: number;
+  initialKitchenStock: number;
+  initialBoothStock: number;
+  totalCooked: number;
+  totalDelivered: number;
+  totalAvailableStock: number;
+  remainingStock: number;
 }
 
 interface UserOption {
@@ -45,6 +58,10 @@ export default function AdminProductionPage() {
   const [cookingRecords, setCookingRecords] = useState<CookingRecord[]>([]);
   const [staffList, setStaffList] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Live stock state
+  const [stockSummary, setStockSummary] = useState<StockSummary | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
 
   // Modal Cooking Form State
   const [showCookingModal, setShowCookingModal] = useState(false);
@@ -68,6 +85,21 @@ export default function AdminProductionPage() {
       // ignore
     }
   }, []);
+
+  const fetchStock = useCallback(async (dateStr?: string) => {
+    setLoadingStock(true);
+    try {
+      const targetDate = dateStr || fromDate || todayStr;
+      const res = await api.get<StockSummary>(`/production-stock?date=${targetDate}`);
+      if (res.success && res.data) {
+        setStockSummary(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingStock(false);
+    }
+  }, [fromDate, todayStr]);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -96,7 +128,8 @@ export default function AdminProductionPage() {
 
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+    fetchStock();
+  }, [fetchReports, fetchStock]);
 
   const handleSetToday = () => {
     setFromDate(todayStr);
@@ -152,6 +185,7 @@ export default function AdminProductionPage() {
         if (res.success) {
           setShowCookingModal(false);
           fetchReports();
+          fetchStock();
         } else {
           setFormError(res.error?.message || 'Gagal mengubah laporan memasak');
         }
@@ -166,6 +200,7 @@ export default function AdminProductionPage() {
         if (res.success) {
           setShowCookingModal(false);
           fetchReports();
+          fetchStock();
         } else {
           setFormError(res.error?.message || 'Gagal menambahkan laporan memasak');
         }
@@ -186,6 +221,7 @@ export default function AdminProductionPage() {
       const res = await api.delete(`/production-reports/${id}`);
       if (res.success) {
         setCookingRecords((prev) => prev.filter((r) => r.id !== id));
+        fetchStock();
       } else {
         alert(res.error?.message || 'Gagal menghapus laporan memasak');
       }
@@ -213,7 +249,6 @@ export default function AdminProductionPage() {
 
   const totalLitersCooked = cookingRecords.reduce((acc, r) => acc + r.liters, 0);
   const totalSessionsCooked = cookingRecords.length;
-  const avgLitersCooked = totalSessionsCooked > 0 ? (totalLitersCooked / totalSessionsCooked).toFixed(1) : '0';
 
   return (
     <div className="space-y-6 pb-16">
@@ -230,11 +265,14 @@ export default function AdminProductionPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={fetchReports}
+            onClick={() => {
+              fetchReports();
+              fetchStock();
+            }}
             disabled={loading}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs flex items-center gap-1.5"
           >
-            <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 text-slate-500 ${loading || loadingStock ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <button
@@ -267,10 +305,25 @@ export default function AdminProductionPage() {
           <p className="mt-2 text-3xl font-bold text-slate-900">{totalSessionsCooked} Sesi</p>
           <p className="mt-1 text-xs text-slate-500">Berdasarkan data operasional dapur</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Rata-rata Per Sesi Masak</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{avgLitersCooked} Liter / Sesi</p>
-          <p className="mt-1 text-xs text-slate-500">Kapasitas dandang kompor dapur</p>
+        <div
+          className={`rounded-xl border p-5 shadow-sm ${
+            (stockSummary?.remainingStock ?? 0) > 0
+              ? 'bg-emerald-50/70 border-emerald-300'
+              : 'bg-white border-slate-200'
+          }`}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+            <Droplets className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Sisa Masakan Belum Terkirim</span>
+          </p>
+          <p className="mt-2 text-3xl font-black text-emerald-950">
+            {loadingStock ? '...' : `${(stockSummary?.remainingStock ?? 0).toFixed(1)} Liter`}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {loadingStock
+              ? 'Memuat sisa stok...'
+              : `Total terkirim: ${(stockSummary?.totalDelivered ?? 0).toFixed(1)} L | Dapur: ${(stockSummary?.remainingStock ?? 0).toFixed(1)} L`}
+          </p>
         </div>
       </div>
 
