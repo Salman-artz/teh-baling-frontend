@@ -26,7 +26,7 @@ export default function ProductsPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [selectedSeries, setSelectedSeries] = useState('ALL');
-  const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
