@@ -26,6 +26,7 @@ export default function ProductsPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [selectedSeries, setSelectedSeries] = useState('ALL');
+  const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -57,9 +58,16 @@ export default function ProductsPage() {
     fetchData();
   }, [fetchData]);
 
-  const filteredProducts = selectedSeries === 'ALL'
-    ? productList
-    : productList.filter((p) => p.seriesId === selectedSeries);
+  const filteredProducts = productList.filter((p) => {
+    const matchSeries = selectedSeries === 'ALL' || p.seriesId === selectedSeries;
+    const matchStatus =
+      selectedStatus === 'ALL'
+        ? true
+        : selectedStatus === 'ACTIVE'
+          ? p.isActive !== false
+          : p.isActive === false;
+    return matchSeries && matchStatus;
+  });
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -183,21 +191,43 @@ export default function ProductsPage() {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="text-sm font-medium text-slate-700">Filter Series:</label>
-        <select
-          data-testid="product-series-filter"
-          value={selectedSeries}
-          onChange={(e) => setSelectedSeries(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
-        >
-          <option value="ALL">Semua Series ({productList.length})</option>
-          {seriesOptions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700">Series:</label>
+          <select
+            data-testid="product-series-filter"
+            value={selectedSeries}
+            onChange={(e) => setSelectedSeries(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+          >
+            <option value="ALL">Semua Series ({productList.length})</option>
+            {seriesOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="h-6 w-px bg-slate-300 hidden sm:block" />
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700">Status:</label>
+          <select
+            data-testid="product-status-filter"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
+          >
+            <option value="ALL">Semua Status</option>
+            <option value="ACTIVE">✅ Aktif ({productList.filter(p => p.isActive !== false).length})</option>
+            <option value="INACTIVE">❌ Non-Aktif ({productList.filter(p => p.isActive === false).length})</option>
+          </select>
+        </div>
+
+        <div className="ml-auto text-xs text-slate-500">
+          Menampilkan {filteredProducts.length} dari {productList.length} produk
+        </div>
       </div>
 
       {/* Modal Tambah / Edit Produk */}
