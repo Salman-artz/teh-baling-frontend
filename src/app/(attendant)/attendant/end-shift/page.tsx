@@ -81,6 +81,7 @@ interface TodayReportData {
   shiftType: string;
   cashModal: number;
   cashFinal?: number | null;
+  qrisFinal?: number | null;
   status: string;
   notes?: string | null;
   gpsTimeStart?: string | null;
@@ -115,6 +116,7 @@ export default function EndShiftPage() {
   const [teaRemainingLiters, setTeaRemainingLiters] = useState('0');
   const [cashModal, setCashModal] = useState<number>(50000);
   const [cashFinal, setCashFinal] = useState('50000');
+  const [qrisFinal, setQrisFinal] = useState('0');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +161,9 @@ export default function EndShiftPage() {
           if (reportRes.data.cashModal !== undefined && reportRes.data.cashModal !== null) {
             modalFromReport = reportRes.data.cashModal;
             setCashModal(modalFromReport);
+          }
+          if (reportRes.data.qrisFinal !== undefined && reportRes.data.qrisFinal !== null) {
+            setQrisFinal(String(reportRes.data.qrisFinal));
           }
           if (Array.isArray(reportRes.data.stockItems)) {
             reportRes.data.stockItems.forEach((s) => {
@@ -329,7 +334,9 @@ export default function EndShiftPage() {
   const totalProductsSold = salesItems.reduce((sum, item) => sum + item.qtySold, 0);
   const expectedTotalCash = cashModal + totalSalesRevenue;
   const finalCashNum = parseInt(cashFinal, 10) || 0;
-  const variance = finalCashNum - expectedTotalCash;
+  const finalQrisNum = parseInt(qrisFinal, 10) || 0;
+  const totalActualReceived = finalCashNum + finalQrisNum;
+  const variance = totalActualReceived - expectedTotalCash;
 
   // Cup usage breakdown by cup type
   const cupsSoldMap: Record<string, number> = {};
@@ -420,6 +427,7 @@ export default function EndShiftPage() {
 
       const res = await api.post('/daily-reports/end', {
         cashFinal: finalCashNum,
+        qrisFinal: finalQrisNum,
         teaRemainingLiters: !isPagi ? (parseFloat(teaRemainingLiters) || 0) : 0,
         stockItems: cupStocks.map((c) => {
           const finalVal = parseInt(c.qtyFinal, 10) || 0;
@@ -464,7 +472,9 @@ export default function EndShiftPage() {
   if (todayReport && todayReport.status === 'CLOSED') {
     const recordedModal = todayReport.cashModal || 0;
     const recordedFinal = todayReport.cashFinal || 0;
-    const recordedVariance = recordedFinal - recordedModal;
+    const recordedQris = todayReport.qrisFinal || 0;
+    const recordedTotalReceived = recordedFinal + recordedQris;
+    const recordedVariance = recordedTotalReceived - recordedModal;
 
     return (
       <div className="space-y-6 pb-24 max-w-lg mx-auto">
@@ -510,9 +520,15 @@ export default function EndShiftPage() {
               <span className="font-semibold text-white">{formatRupiah(recordedModal)}</span>
             </div>
             <div className="flex justify-between items-center text-slate-300">
-              <span>Uang Fisik Akhir Kasir:</span>
+              <span>Uang Fisik Akhir Kasir (Tunai):</span>
               <span className="font-bold text-sm text-emerald-400">{formatRupiah(recordedFinal)}</span>
             </div>
+            {recordedQris > 0 && (
+              <div className="flex justify-between items-center text-slate-300">
+                <span>Setoran QRIS / Non-Tunai:</span>
+                <span className="font-bold text-sm text-sky-400">{formatRupiah(recordedQris)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center font-bold text-white pt-1.5 border-t border-slate-800">
               <span>Total Penjualan Dihitung:</span>
               <span className="text-emerald-400">+{formatRupiah(Math.max(0, recordedVariance))}</span>
@@ -965,24 +981,50 @@ export default function EndShiftPage() {
           </div>
         )}
 
-        {/* 4. Input Uang Fisik Kasir */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <h2 className="font-bold text-slate-900 text-sm">
-            {!isPagi ? '4' : '3'}. Uang Fisik Akhir di Laci Kasir
-          </h2>
+        {/* 4. Input Uang Fisik Kasir & Setoran QRIS */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Total Uang Kasir Fisik (Modal Shift {isPagi ? 'Pagi' : 'Sore'} + Omzet Penjualan)
-            </label>
-            <input
-              type="number"
-              inputMode="numeric"
-              data-testid="cash-final-input"
-              value={cashFinal}
-              onChange={(e) => setCashFinal(e.target.value)}
-              className="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-lg font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
-              required
-            />
+            <h2 className="font-bold text-slate-900 text-sm">
+              {!isPagi ? '4' : '3'}. Penerimaan Kasir Akhir Shift
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Hitung uang fisik tunai di laci kasir dan total penerimaan non-tunai (QRIS / transfer).
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Field A: Uang Tunai di Laci */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                A. Uang Fisik Kasir di Laci (Modal Awal + Omzet Tunai)
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                data-testid="cash-final-input"
+                value={cashFinal}
+                onChange={(e) => setCashFinal(e.target.value)}
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-lg font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                required
+              />
+            </div>
+
+            {/* Field B: Setoran QRIS / Transfer */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span>B. Total Setoran QRIS / Transfer Non-Tunai</span>
+                <span className="text-[10px] font-normal text-slate-400">Isi 0 jika tidak ada</span>
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                data-testid="qris-final-input"
+                value={qrisFinal}
+                onChange={(e) => setQrisFinal(e.target.value)}
+                placeholder="0"
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-lg font-bold text-sky-900 bg-sky-50/40 focus:border-sky-500 focus:outline-none"
+              />
+            </div>
           </div>
         </div>
 
@@ -1001,13 +1043,29 @@ export default function EndShiftPage() {
               <span className="font-semibold text-white">{formatRupiah(cashModal)}</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span>Total Omzet Penjualan:</span>
+              <span>Total Omzet Penjualan (Menu):</span>
               <span className="font-semibold text-emerald-400">{formatRupiah(totalSalesRevenue)}</span>
             </div>
             <div className="flex justify-between font-bold text-white pt-1.5 border-t border-slate-800">
-              <span>Uang Kas Seharusnya:</span>
+              <span>Total Uang Kas Seharusnya:</span>
               <span>{formatRupiah(expectedTotalCash)}</span>
             </div>
+
+            <div className="pt-2 border-t border-slate-800/80 space-y-1">
+              <div className="flex justify-between text-slate-300 text-[11px]">
+                <span>• Uang Fisik Kasir (Tunai):</span>
+                <span className="font-semibold text-white">{formatRupiah(finalCashNum)}</span>
+              </div>
+              <div className="flex justify-between text-slate-300 text-[11px]">
+                <span>• Setoran QRIS / Non-Tunai:</span>
+                <span className="font-semibold text-sky-400">{formatRupiah(finalQrisNum)}</span>
+              </div>
+              <div className="flex justify-between text-white font-bold pt-1 border-t border-slate-800">
+                <span>Total Penerimaan Aktual (Tunai + QRIS):</span>
+                <span className="text-emerald-400 font-extrabold">{formatRupiah(totalActualReceived)}</span>
+              </div>
+            </div>
+
             <div className="flex justify-between font-bold pt-1">
               <span>Selisih Kasir (Cash Variance):</span>
               <span

@@ -37,7 +37,7 @@ export default function LoginPage() {
       const res = await api.post<{
         accessToken: string;
         refreshToken?: string;
-        user: { id: string; name: string; email: string; role: 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION' };
+        user: { id: string; name: string; email: string; role: 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION' | 'OPERATIONAL_ADMIN' };
       }>('/auth/login', { email: cleanEmail, password });
 
       if (res.success && res.data) {

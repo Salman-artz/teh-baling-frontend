@@ -53,20 +53,20 @@ export function middleware(request: NextRequest) {
   const role = payload.role;
 
   // Role Based Route Guards
-  if (isAdminRoute && role !== 'ADMIN') {
+  if (isAdminRoute && role !== 'ADMIN' && role !== 'OPERATIONAL_ADMIN') {
     if (role === 'BOOTH_ATTENDANT') return NextResponse.redirect(new URL('/attendant', request.url));
     if (role === 'PRODUCTION') return NextResponse.redirect(new URL('/production', request.url));
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   if (isAttendantRoute && role !== 'BOOTH_ATTENDANT') {
-    if (role === 'ADMIN') return NextResponse.redirect(new URL('/admin', request.url));
+    if (role === 'ADMIN' || role === 'OPERATIONAL_ADMIN') return NextResponse.redirect(new URL('/admin', request.url));
     if (role === 'PRODUCTION') return NextResponse.redirect(new URL('/production', request.url));
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   if (isProductionRoute && role !== 'PRODUCTION') {
-    if (role === 'ADMIN') return NextResponse.redirect(new URL('/admin', request.url));
+    if (role === 'ADMIN' || role === 'OPERATIONAL_ADMIN') return NextResponse.redirect(new URL('/admin', request.url));
     if (role === 'BOOTH_ATTENDANT') return NextResponse.redirect(new URL('/attendant', request.url));
     return NextResponse.redirect(new URL('/login', request.url));
   }

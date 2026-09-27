@@ -13,6 +13,7 @@ import {
   Flame,
   Truck,
   FileSpreadsheet,
+  FileEdit,
   Users,
   LogOut,
   Menu,
@@ -21,17 +22,18 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 
-const navItems = [
+const allNavItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Series Teh', href: '/admin/series', icon: Layers },
-  { label: 'Produk Teh', href: '/admin/products', icon: Coffee },
-  { label: 'Cup & Mapping', href: '/admin/cups', icon: CupSoda },
-  { label: 'Data Booth', href: '/admin/booths', icon: Store },
-  { label: 'Jadwal Shift', href: '/admin/assignments', icon: CalendarDays },
-  { label: 'Laporan Produksi', href: '/admin/production', icon: Flame },
-  { label: 'Laporan Pengiriman', href: '/admin/deliveries', icon: Truck },
-  { label: 'Laporan Penjualan', href: '/admin/summary', icon: FileSpreadsheet },
-  { label: 'User Management', href: '/admin/users', icon: Users },
+  { label: 'Series Teh', href: '/admin/series', icon: Layers, roles: ['ADMIN'] },
+  { label: 'Produk Teh', href: '/admin/products', icon: Coffee, roles: ['ADMIN'] },
+  { label: 'Cup & Mapping', href: '/admin/cups', icon: CupSoda, roles: ['ADMIN'] },
+  { label: 'Data Booth', href: '/admin/booths', icon: Store, roles: ['ADMIN'] },
+  { label: 'Jadwal Shift', href: '/admin/assignments', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONAL_ADMIN'] },
+  { label: 'Input Laporan Shift', href: '/admin/input-shift', icon: FileEdit, roles: ['ADMIN', 'OPERATIONAL_ADMIN'] },
+  { label: 'Laporan Produksi', href: '/admin/production', icon: Flame, roles: ['ADMIN'] },
+  { label: 'Laporan Pengiriman', href: '/admin/deliveries', icon: Truck, roles: ['ADMIN'] },
+  { label: 'Laporan Penjualan', href: '/admin/summary', icon: FileSpreadsheet, roles: ['ADMIN', 'OPERATIONAL_ADMIN'] },
+  { label: 'User Management', href: '/admin/users', icon: Users, roles: ['ADMIN'] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -49,6 +51,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.location.replace('/login');
   };
 
+  const currentRole = user?.role || 'ADMIN';
+  const navItems = allNavItems.filter((item) => !item.roles || item.roles.includes(currentRole));
+  const roleLabel = currentRole === 'OPERATIONAL_ADMIN' ? 'ADMIN OPERASIONAL' : 'ADMINISTRATOR';
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col lg:pl-64 text-slate-900 max-w-full overflow-x-hidden">
       {/* Sidebar for Desktop (Fixed) */}
@@ -61,7 +67,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             <div>
               <h1 className="font-bold text-base leading-none text-white">Teh Baling</h1>
-              <span className="text-[11px] font-semibold text-emerald-400 tracking-wider uppercase">Admin Portal</span>
+              <span className="text-[11px] font-semibold text-emerald-400 tracking-wider uppercase">{currentRole === 'OPERATIONAL_ADMIN' ? 'Ops Portal' : 'Admin Portal'}</span>
             </div>
           </div>
         </div>
@@ -141,7 +147,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
               <div className="hidden md:block text-left">
                 <p className="text-xs font-bold text-slate-900">{mounted && user?.name ? user.name : 'Administrator'}</p>
-                <p className="text-[10px] text-slate-500 font-semibold">ADMINISTRATOR</p>
+                <p className="text-[10px] text-slate-500 font-semibold">{roleLabel}</p>
               </div>
               <button
                 onClick={handleLogout}

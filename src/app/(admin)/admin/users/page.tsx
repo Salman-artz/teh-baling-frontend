@@ -9,7 +9,7 @@ interface UserItem {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION';
+  role: 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION' | 'OPERATIONAL_ADMIN';
   isActive: boolean;
   createdAt: string;
 }
@@ -27,7 +27,7 @@ export default function UsersPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState<'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION'>('BOOTH_ATTENDANT');
+  const [role, setRole] = useState<'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION' | 'OPERATIONAL_ADMIN'>('BOOTH_ATTENDANT');
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -170,7 +170,7 @@ export default function UsersPage() {
     setLoading(true);
     try {
       if (editingId) {
-        const payload: { name: string; email: string; role: 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION'; password?: string } = {
+        const payload: { name: string; email: string; role: 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION' | 'OPERATIONAL_ADMIN'; password?: string } = {
           name: name.trim(),
           email: email.trim().toLowerCase(),
           role,
@@ -225,6 +225,12 @@ export default function UsersPage() {
         return (
           <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">
             👑 Administrator
+          </span>
+        );
+      case 'OPERATIONAL_ADMIN':
+        return (
+          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+            📋 Admin Operasional
           </span>
         );
       case 'BOOTH_ATTENDANT':
@@ -370,6 +376,7 @@ export default function UsersPage() {
             >
               <option value="ALL">Semua Peran</option>
               <option value="ADMIN">Administrator</option>
+              <option value="OPERATIONAL_ADMIN">Admin Operasional</option>
               <option value="BOOTH_ATTENDANT">Staf Stand (Attendant)</option>
               <option value="PRODUCTION">Staf Dapur Produksi</option>
             </select>
@@ -472,10 +479,11 @@ export default function UsersPage() {
               <select
                 data-testid="user-role-select"
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION')}
+                onChange={(e) => setRole(e.target.value as 'ADMIN' | 'BOOTH_ATTENDANT' | 'PRODUCTION' | 'OPERATIONAL_ADMIN')}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none"
               >
                 <option value="BOOTH_ATTENDANT">Staf Stand (Booth Attendant)</option>
+                <option value="OPERATIONAL_ADMIN">Admin Operasional (Jadwal Shift & Hasil Penjualan)</option>
                 <option value="PRODUCTION">Staf Dapur Produksi (Production Staff)</option>
                 <option value="ADMIN">Administrator / Pemilik (Admin)</option>
               </select>
