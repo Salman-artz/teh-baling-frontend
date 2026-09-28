@@ -17,7 +17,6 @@ import {
   AlertCircle,
   Package,
   Layers,
-  FileText,
 } from 'lucide-react';
 
 interface CupBreakdownItem {
@@ -65,16 +64,6 @@ interface SummaryItem {
   stockItems?: StockItemDetail[];
 }
 
-interface BoothSummary {
-  boothId: string;
-  boothName: string;
-  boothAddress: string;
-  totalRevenue: number;
-  totalCupsSold: number;
-  cupBreakdown: Record<string, number>;
-  reportCount: number;
-}
-
 interface BoothOption {
   id: string;
   name: string;
@@ -91,10 +80,10 @@ export default function SummaryPage() {
   const [fromDate, setFromDate] = useState(todayStr);
   const [toDate, setToDate] = useState(todayStr);
   const [boothId, setBoothId] = useState('ALL');
+  const [shift, setShift] = useState('ALL');
   const [boothOptions, setBoothOptions] = useState<BoothOption[]>([]);
   
   const [data, setData] = useState<SummaryItem[]>([]);
-  const [boothSummaries, setBoothSummaries] = useState<BoothSummary[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Modal detail per shift
@@ -119,29 +108,24 @@ export default function SummaryPage() {
     try {
       const res = await api.get<{
         data: SummaryItem[];
-        boothSummaries?: BoothSummary[];
       }>(
-        `/dashboard/summary-table?from=${fromDate}&to=${toDate}&boothId=${boothId}`
+        `/dashboard/summary-table?from=${fromDate}&to=${toDate}&boothId=${boothId}&shift=${shift}`
       );
       if (res.success && res.data) {
         if (Array.isArray(res.data)) {
           setData(res.data);
-          setBoothSummaries([]);
         } else if (res.data.data && Array.isArray(res.data.data)) {
           setData(res.data.data);
-          setBoothSummaries(res.data.boothSummaries || []);
         }
       } else {
         setData([]);
-        setBoothSummaries([]);
       }
     } catch {
       setData([]);
-      setBoothSummaries([]);
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate, boothId]);
+  }, [fromDate, toDate, boothId, shift]);
 
   useEffect(() => {
     fetchSummary();
@@ -150,9 +134,10 @@ export default function SummaryPage() {
   const handleExportSales = async () => {
     setSalesExportLoading(true);
     try {
+      const shiftSuffix = shift !== 'ALL' ? `_Shift_${shift}` : '';
       await downloadFile(
-        `/export/sales?from=${fromDate}&to=${toDate}&boothId=${boothId}`,
-        `Laporan_Penjualan_${fromDate}_sd_${toDate}.xlsx`
+        `/export/sales?from=${fromDate}&to=${toDate}&boothId=${boothId}&shift=${shift}`,
+        `Laporan_Penjualan_${fromDate}_sd_${toDate}${shiftSuffix}.xlsx`
       );
     } finally {
       setSalesExportLoading(false);
@@ -278,7 +263,7 @@ export default function SummaryPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Dari Tanggal</label>
             <input
@@ -313,6 +298,19 @@ export default function SummaryPage() {
                   {b.name}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Shift</label>
+            <select
+              data-testid="shift-filter-select"
+              value={shift}
+              onChange={(e) => setShift(e.target.value)}
+              className="block w-full rounded-lg border border-slate-300 p-2.5 text-sm font-semibold text-slate-900 focus:border-emerald-500 focus:outline-none bg-white"
+            >
+              <option value="ALL">Semua Shift</option>
+              <option value="PAGI">Shift Pagi (Shift 1)</option>
+              <option value="SORE">Shift Sore (Shift 2)</option>
             </select>
           </div>
         </div>
@@ -391,129 +389,14 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* DETAIL PENJUALAN PER BOOTH (CARD GRID) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Store className="w-5 h-5 text-emerald-700" />
-            <h2 className="text-base font-bold text-slate-900">Detail Penjualan Per Booth</h2>
-          </div>
-          <span className="text-xs font-semibold text-slate-500">
-            {boothSummaries.length > 0 ? `${boothSummaries.length} Booth Aktif` : `${data.length} Data Shift`}
-          </span>
-        </div>
-
-        {loading && data.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-500 flex items-center justify-center gap-2">
-            <RefreshCw className="h-5 w-5 animate-spin text-emerald-600" />
-            <span>Memuat detail penjualan booth...</span>
-          </div>
-        ) : boothSummaries.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {boothSummaries.map((b) => (
-              <div
-                key={b.boothId}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs hover:shadow-md transition space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-900">{b.boothName}</h3>
-                    <p className="text-[11px] text-slate-500 line-clamp-1">{b.boothAddress}</p>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-                    {b.reportCount} Shift
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-lg">
-                  <div>
-                    <span className="block text-[10px] font-semibold text-slate-500">Omzet Booth</span>
-                    <span className="text-sm font-extrabold text-emerald-800">{formatRupiah(b.totalRevenue)}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-semibold text-slate-500">Cup Terjual</span>
-                    <span className="text-sm font-extrabold text-indigo-900">{b.totalCupsSold} Cup</span>
-                  </div>
-                </div>
-
-                {/* Cup breakdown badges */}
-                <div className="space-y-1">
-                  <span className="block text-[11px] font-semibold text-slate-500">Rincian Cup Terjual:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.keys(b.cupBreakdown).length > 0 ? (
-                      Object.entries(b.cupBreakdown).map(([cupName, qty]) => (
-                        <span
-                          key={cupName}
-                          className="text-[11px] font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700 shadow-2xs"
-                        >
-                          <strong className="text-emerald-700">{qty}</strong> {cupName}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">Belum ada rincian cup</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : data.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-900">{item.boothName}</h3>
-                    <p className="text-[11px] text-slate-500">{item.date} • Shift {item.shiftType}</p>
-                  </div>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      item.status === 'CLOSED'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-900'
-                    }`}
-                  >
-                    {item.status === 'CLOSED' ? 'Closed' : 'Open'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg">
-                  <div>
-                    <span className="block text-[10px] font-semibold text-slate-500">Omzet</span>
-                    <span className="text-sm font-extrabold text-emerald-800">{formatRupiah(item.revenue)}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-semibold text-slate-500">Cup Terjual</span>
-                    <span className="text-sm font-extrabold text-indigo-900">{item.cupsSold} Cup</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-500 font-medium">Kasir: <strong className="text-slate-700">{item.attendantName}</strong></span>
-                  <button
-                    onClick={() => setSelectedReport(item)}
-                    className="text-emerald-700 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Detail
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      {/* TABEL LENGKAP LAPORAN PENJUALAN KASIR */}
+      {/* TABEL LENGKAP DETAIL PENJUALAN */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-emerald-700" />
-            <h2 className="text-base font-bold text-slate-900">Rincian Laporan Transaksi Shift</h2>
+            <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
+            <h2 className="text-base font-bold text-slate-900">Detail Penjualan</h2>
           </div>
-          <span className="text-xs font-semibold text-slate-500">Total: {data.length} Laporan</span>
+          <span className="text-xs font-semibold text-slate-500">Total: {data.length} Laporan Shift</span>
         </div>
 
         {data.length === 0 && !loading ? (

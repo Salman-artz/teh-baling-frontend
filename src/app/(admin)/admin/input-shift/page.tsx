@@ -143,7 +143,7 @@ export default function AdminInputShiftPage() {
     try {
       const [boothRes, userRes, seriesRes, prodRes, cupRes, rulesRes] = await Promise.all([
         api.get<BoothItem[]>('/booths?status=active'),
-        api.get<UserItem[]>('/users'),
+        api.get<UserItem[]>('/users?role=BOOTH_ATTENDANT'),
         api.get<SeriesItem[]>('/tea-series'),
         api.get<ProductItem[]>('/tea-products'),
         api.get<CupTypeItem[]>('/cup-types'),
@@ -158,9 +158,9 @@ export default function AdminInputShiftPage() {
       }
 
       if (userRes.success && Array.isArray(userRes.data)) {
-        // Filter users who can be attendants
+        // Filter users who can be attendants - HANYA BOOTH_ATTENDANT
         const eligibleUsers = userRes.data.filter(
-          (u) => u.isActive && (u.role === 'BOOTH_ATTENDANT' || u.role === 'OPERATIONAL_ADMIN' || u.role === 'ADMIN')
+          (u) => u.isActive && u.role === 'BOOTH_ATTENDANT'
         );
         setAttendants(eligibleUsers);
         if (eligibleUsers.length > 0 && !selectedAttendantId) {
@@ -699,9 +699,12 @@ export default function AdminInputShiftPage() {
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 focus:border-emerald-500 focus:outline-none shadow-2xs"
                 required
               >
+                {attendants.length === 0 && (
+                  <option value="">Belum ada staf booth (Attendant) aktif</option>
+                )}
                 {attendants.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name} ({u.role === 'OPERATIONAL_ADMIN' ? 'Admin Ops' : u.role === 'ADMIN' ? 'Admin' : 'Attendant'})
+                    {u.name} (Booth Attendant)
                   </option>
                 ))}
               </select>

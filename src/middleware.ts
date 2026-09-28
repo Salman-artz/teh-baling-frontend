@@ -26,31 +26,37 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Retrieve token from cookie or Authorization header
-  const tokenCookie = request.cookies.get('access_token');
-  const token = tokenCookie?.value;
+  const nowInSeconds = Math.floor(Date.now() / 1000);
 
-  if (!token) {
+  // Retrieve tokens from cookies
+  const tokenCookie = request.cookies.get('access_token');
+  const refreshCookie = request.cookies.get('refresh_token');
+
+  const accessToken = tokenCookie?.value;
+  const refreshToken = refreshCookie?.value;
+
+  const accessPayload = accessToken ? parseJwtPayload(accessToken) : null;
+  const refreshPayload = refreshToken ? parseJwtPayload(refreshToken) : null;
+
+  const isAccessValid = accessPayload && (!accessPayload.exp || accessPayload.exp > nowInSeconds);
+  const isRefreshValid = refreshPayload && (!refreshPayload.exp || refreshPayload.exp > nowInSeconds);
+
+  // If neither token is valid, redirect to login
+  if (!isAccessValid && !isRefreshValid) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    const response = NextResponse.redirect(loginUrl);
+    response.cookies.delete('access_token');
+    response.cookies.delete('refresh_token');
+    return response;
+  }
+
+  const role = accessPayload?.role || refreshPayload?.role;
+  if (!role) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
-
-  const payload = parseJwtPayload(token);
-  if (!payload) {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // Check token expiration
-  const nowInSeconds = Math.floor(Date.now() / 1000);
-  if (payload.exp && payload.exp < nowInSeconds) {
-    const response = NextResponse.redirect(new URL('/login', request.url));
-    response.cookies.delete('access_token');
-    return response;
-  }
-
-  const role = payload.role;
 
   // Role Based Route Guards
   if (isAdminRoute && role !== 'ADMIN' && role !== 'OPERATIONAL_ADMIN') {
