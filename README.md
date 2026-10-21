@@ -28,6 +28,10 @@
 | **Peta Pemetaan Booth (Leaflet GIS)**<br/>Visualisasi lokasi titik koordinat booth, status operasional (buka/tutup), dan ringkasan outlet realtime. | <img src="public/screenshots/foto1_peta_booth_leaflet.png" alt="Peta Pemetaan Booth Leaflet" width="480" /> |
 | **Presensi Geofencing GPS (Haversine)**<br/>Verifikasi kehadiran barista/penjaga booth dengan validasi radius lokasi (maksimal 200m dari koordinat booth). | <img src="public/screenshots/foto2_presensi_geofencing_gps.png" alt="Presensi Geofencing GPS" width="480" /> |
 | **Audit & Rekonsiliasi Stok Cup**<br/>Pelacakan mutasi stok cup harian per booth, verifikasi selisih fisik vs penjualan, serta pencegahan loss operasional. | <img src="public/screenshots/foto4_audit_stok_cup.png" alt="Audit Stok Cup" width="480" /> |
+| **Autentikasi & Login Role Penjaga Booth**<br/>Halaman login terproteksi role penjaga booth (`BOOTH_ATTENDANT`) dengan verifikasi identitas dan pendeteksian sesi aktif. | <img src="public/screenshots/foto5_login_role_penjaga_booth.png" alt="Login Role Penjaga Booth" width="480" /> |
+| **Portal Penugasan & Shift Penjaga Booth**<br/>Dashboard operasional penjaga stand booth: penugasan outlet harian, pemilihan sesi shift (Pagi/Sore), dan modal kasir aktif. | <img src="public/screenshots/foto6_portal_penjaga_booth.png" alt="Portal Shift Penjaga Booth" width="480" /> |
+| **Autentikasi & Login Role Tim Produksi**<br/>Halaman login terproteksi role tim produksi dapur (`PRODUCTION`) dengan session guard dan pengalihan dashboard otomatis. | <img src="public/screenshots/foto7_login_role_tim_produksi.png" alt="Login Role Tim Produksi" width="480" /> |
+| **Portal Dapur & Pencatatan Produksi Teh**<br/>Modul dapur untuk pencatatan batch memasak teh harian (liter), catatan bahan baku, dan monitoring jam operasional input. | <img src="public/screenshots/foto8_portal_tim_produksi.png" alt="Portal Dapur Tim Produksi" width="480" /> |
 
 </details>
 
@@ -53,6 +57,16 @@
 - Pencatatan stok awal, restock harian dari gudang pusat, dan stok terpakai berbasis transaksi kasir.
 - Deteksi otomatis deviasi/selisih (*discrepancy alert*) untuk mencegah kebocoran bahan baku.
 - Dukungan ekspor laporan resmi harian/bulanan ke format **Microsoft Excel (.xlsx)** via ExcelJS.
+
+### 🍵 Portal Operasional Penjaga Booth (Barista / Kasir)
+- Autentikasi berbasis JWT dengan otorisasi role terproteksi `BOOTH_ATTENDANT`.
+- Tampilan penugasan booth harian otomatis, verifikasi sesi shift (Pagi/Sore), serta pencatatan modal awal kasir.
+- Modul restock inventaris cup langsung dari outlet dengan validasi stok terintegrasi.
+
+### 🔥 Modul Produksi & Distribusi Dapur (Kitchen Staf)
+- Portal terisolasi role `PRODUCTION` dengan pembatasan jam operasional input (05:00 - 23:00 WIB).
+- Form pelaporan volume masak teh harian (liter) dan catatan varian batch bahan baku.
+- Integrasi riwayat memasak dan modul pengiriman bahan baku ke seluruh titik cabang booth.
 
 ---
 
