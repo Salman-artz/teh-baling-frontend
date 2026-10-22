@@ -8,32 +8,42 @@
 
 # 🍵 Teh Baling — Multi-Outlet Booth Operations ERP
 
-> Sistem ERP operasional end-to-end yang dibangun untuk jaringan franchise minuman guna mengelola sebaran cabang booth, presensi berbasis geofencing GPS, pelacakan stok cup, dan analitik performa penjualan terpusat.
+> Sistem ERP operasional end-to-end yang dibangun untuk jaringan cabang gerai minuman (multi-branch outlet) guna mengelola sebaran cabang booth, presensi berbasis geofencing GPS, pelacakan audit stok cup, dan analitik performa penjualan terpusat secara real-time.
 
 ---
 
-## 📸 Screenshots & Antarmuka Sistem
+## 📸 Screenshots & Antarmuka Sistem Terkini
 
+Tangkapan layar antarmuka sistem (High-DPI) dari portal operasional Teh Baling:
+
+### 1. 🗺️ Manajemen Cabang Booth & Titik Koordinat GPS
 <p align="center">
-  <img src="public/screenshots/foto3_dashboard_analitik_recharts.png" alt="Dashboard Analitik Penjualan Multi-Booth" width="95%" />
+  <img src="public/screenshots/foto1_manajemen_booth_gps.png" alt="Manajemen Booth & Outlet GPS" width="100%" />
   <br/>
-  <em>Dashboard Analitik Multi-Booth dengan Visualisasi Penjualan & Jam Sibuk (Recharts)</em>
+  <em>Manajemen Sebaran Cabang Booth: Pendataan 10 titik cabang aktif (Jemekan, Sambi, Butuh, Ngadirejo, Ngasem, Pelas, Krandang, Jabang, Kanigoro, Kras), alamat fisik, titik koordinat GPS peta, serta toggle status operasional.</em>
 </p>
 
-<details open>
-<summary><strong>Lihat Galeri Fitur Utama Lainnya ▾</strong></summary>
+---
 
-| Modul | Tampilan Antarmuka |
-|-------|--------------------|
-| **Peta Pemetaan Booth (Leaflet GIS)**<br/>Visualisasi lokasi titik koordinat booth, status operasional (buka/tutup), dan ringkasan outlet realtime. | <img src="public/screenshots/foto1_peta_booth_leaflet.png" alt="Peta Pemetaan Booth Leaflet" width="480" /> |
-| **Presensi Geofencing GPS (Haversine)**<br/>Verifikasi kehadiran barista/penjaga booth dengan validasi radius lokasi (maksimal 200m dari koordinat booth). | <img src="public/screenshots/foto2_presensi_geofencing_gps.png" alt="Presensi Geofencing GPS" width="480" /> |
-| **Audit & Rekonsiliasi Stok Cup**<br/>Pelacakan mutasi stok cup harian per booth, verifikasi selisih fisik vs penjualan, serta pencegahan loss operasional. | <img src="public/screenshots/foto4_audit_stok_cup.png" alt="Audit Stok Cup" width="480" /> |
-| **Autentikasi & Login Role Penjaga Booth**<br/>Halaman login terproteksi role penjaga booth (`BOOTH_ATTENDANT`) dengan verifikasi identitas dan pendeteksian sesi aktif. | <img src="public/screenshots/foto5_login_role_penjaga_booth.png" alt="Login Role Penjaga Booth" width="480" /> |
-| **Portal Penugasan & Shift Penjaga Booth**<br/>Dashboard operasional penjaga stand booth: penugasan outlet harian, pemilihan sesi shift (Pagi/Sore), dan modal kasir aktif. | <img src="public/screenshots/foto6_portal_penjaga_booth.png" alt="Portal Shift Penjaga Booth" width="480" /> |
-| **Autentikasi & Login Role Tim Produksi**<br/>Halaman login terproteksi role tim produksi dapur (`PRODUCTION`) dengan session guard dan pengalihan dashboard otomatis. | <img src="public/screenshots/foto7_login_role_tim_produksi.png" alt="Login Role Tim Produksi" width="480" /> |
-| **Portal Dapur & Pencatatan Produksi Teh**<br/>Modul dapur untuk pencatatan batch memasak teh harian (liter), catatan bahan baku, dan monitoring jam operasional input. | <img src="public/screenshots/foto8_portal_tim_produksi.png" alt="Portal Dapur Tim Produksi" width="480" /> |
+### 2. 🍵 Manajemen Master Ukuran Cup & Matriks Harga Dinamis
+<p align="center">
+  <img src="public/screenshots/foto4_manajemen_cup_mapping.png" alt="Manajemen Ukuran Cup & Mapping Series Teh" width="100%" />
+  <br/>
+  <em>Matriks Kategori & Harga: Konfigurasi varian ukuran cup (Cup Kecil, Medium, Best, Biggg Jumbo) serta matriks harga jual per kategori series teh (Traditional series, Honey series, Yoghurt series).</em>
+</p>
 
-</details>
+---
+
+### 3. 📍 Modul Operasional & Antarmuka Lainnya
+
+| Modul | Tampilan Antarmuka | Deskripsi Fitur |
+|---|---|---|
+| **Executive Sales Analytics** | <img src="public/screenshots/foto3_dashboard_analitik_recharts.png" alt="Dashboard Analitik Penjualan" width="460" /> | Visualisasi tren omzet per jam, per hari, dan komparasi performa pendapatan antar cabang outlet. |
+| **Presensi Geofencing GPS**<br/>*(Formula Haversine)* | <img src="public/screenshots/foto2_presensi_geofencing_gps.png" alt="Presensi Geofencing GPS" width="460" /> | Verifikasi kehadiran staf/penjaga stand secara akurat dengan batas toleransi radius 200m dari titik koordinat booth cabang untuk mencegah *fake attendance*. |
+| **Portal Penugasan Shift Booth**<br/>*(Role: Penjaga Booth)* | <img src="public/screenshots/foto6_portal_penjaga_booth.png" alt="Portal Penjaga Booth" width="460" /> | Dashboard operasional barista/kasir: penugasan outlet harian, pemilihan sesi shift (Pagi/Sore), checklist kesiapan outlet, dan modal awal kasir aktif. |
+| **Portal Dapur & Masak Teh**<br/>*(Role: Tim Produksi)* | <img src="public/screenshots/foto8_portal_tim_produksi.png" alt="Portal Produksi Dapur" width="460" /> | Modul staf dapur pusat untuk pencatatan batch memasak teh (liter), catatan bahan baku, integrasi stok induk, dan pembatasan jam input operasional. |
+| **Login Otorisasi Penjaga Booth** | <img src="public/screenshots/foto5_login_role_penjaga_booth.png" alt="Login Penjaga Booth" width="460" /> | Portal login khusus staf outlet dengan role guard `BOOTH_ATTENDANT`, JWT session handling, dan redirect langsung ke terminal kasir aktif. |
+| **Login Otorisasi Tim Produksi** | <img src="public/screenshots/foto7_login_role_tim_produksi.png" alt="Login Tim Produksi" width="460" /> | Portal login staf dapur dengan role guard `PRODUCTION`, session guard otomatis, dan proteksi hak akses menu administrasi. |
 
 ---
 
@@ -41,15 +51,15 @@
 
 ### 🗺️ Peta Pemetaan Cabang & Status Booth (GIS)
 - Pemetaan visual seluruh titik booth outlet menggunakan **Leaflet OpenStreetMap**.
-- Menampilkan status langsung (Aktif, Shift Tutup, Maintenance) dengan marker kustom.
+- Menampilkan status langsung (Aktif, Shift Tutup, Maintenance) dengan custom marker ikonik.
 - Detail cepat performa penjualan dan shift yang sedang bertugas per booth.
 
 ### 📍 Presensi Geofencing GPS (Formula Haversine)
 - Mencegah kecurangan presensi (*fake GPS / clock-in dari luar outlet*) dengan perhitungan jarak radius presisi (200m) dari titik koordinat booth.
 - Perekaman timestamp kedatangan, keterlambatan, dan jam kepulangan shift kerja.
 
-### 📊 Dashboard Analitik Multi-Booth (Recharts)
-- Grafik visual perbandingan omzet harian, mingguan, dan bulanan antar outlet.
+### 📊 Dashboard Analitik Multi-Cabang (Recharts)
+- Grafik visual perbandingan omzet harian, mingguan, dan bulanan antar cabang outlet.
 - Analisis *peak hours* (jam-jam tersibuk) untuk alokasi staf dan stok yang efisien.
 - Metrik Best Selling Series (varian rasa terlaris) dan efisiensi konversi cup.
 
@@ -114,7 +124,15 @@ Buka browser di [http://localhost:3000](http://localhost:3000).
 ```
 teh-baling-frontend/
 ├── public/
-│   └── screenshots/          # Tangkapan layar antarmuka sistem
+│   └── screenshots/          # Tangkapan layar antarmuka sistem (High-DPI)
+│       ├── foto1_peta_booth_leaflet.png
+│       ├── foto2_presensi_geofencing_gps.png
+│       ├── foto3_dashboard_analitik_recharts.png
+│       ├── foto4_audit_stok_cup.png
+│       ├── foto5_login_role_penjaga_booth.png
+│       ├── foto6_portal_penjaga_booth.png
+│       ├── foto7_login_role_tim_produksi.png
+│       └── foto8_portal_tim_produksi.png
 ├── src/
 │   ├── app/                  # Next.js 14 App Router pages & layouts
 │   │   ├── (auth)/login/     # Halaman login otentikasi

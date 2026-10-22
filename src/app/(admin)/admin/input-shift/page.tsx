@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { formatRupiah, getWibDateString, getWibDateFormatted } from '@/lib/utils';
@@ -105,12 +106,31 @@ interface ExistingReportDetail {
   saleItems?: { productId: string; cupTypeId: string; qtySold: number; priceSnapshot: number }[];
 }
 
-export default function AdminInputShiftPage() {
+function AdminInputShiftForm() {
+  const searchParams = useSearchParams();
+  const paramBoothId = searchParams.get('boothId');
+  const paramDate = searchParams.get('date');
+  const paramShift = searchParams.get('shift');
+
   // Selection states
-  const [selectedBoothId, setSelectedBoothId] = useState<string>('');
-  const [selectedDate, setSelectedDate] = useState<string>(getWibDateString());
-  const [selectedShift, setSelectedShift] = useState<'PAGI' | 'SORE'>('PAGI');
+  const [selectedBoothId, setSelectedBoothId] = useState<string>(paramBoothId || '');
+  const [selectedDate, setSelectedDate] = useState<string>(paramDate || getWibDateString());
+  const [selectedShift, setSelectedShift] = useState<'PAGI' | 'SORE'>(
+    paramShift === 'SORE' ? 'SORE' : 'PAGI'
+  );
   const [selectedAttendantId, setSelectedAttendantId] = useState<string>('');
+
+  useEffect(() => {
+    if (paramBoothId && paramBoothId !== selectedBoothId) {
+      setSelectedBoothId(paramBoothId);
+    }
+    if (paramDate && paramDate !== selectedDate) {
+      setSelectedDate(paramDate);
+    }
+    if (paramShift && (paramShift === 'PAGI' || paramShift === 'SORE') && paramShift !== selectedShift) {
+      setSelectedShift(paramShift);
+    }
+  }, [paramBoothId, paramDate, paramShift, selectedBoothId, selectedDate, selectedShift]);
 
   // Master Data
   const [booths, setBooths] = useState<BoothItem[]>([]);
@@ -152,7 +172,7 @@ export default function AdminInputShiftPage() {
 
       if (boothRes.success && Array.isArray(boothRes.data)) {
         setBooths(boothRes.data.filter((b) => b.isActive !== false));
-        if (boothRes.data.length > 0 && !selectedBoothId) {
+        if (boothRes.data.length > 0 && !selectedBoothId && !paramBoothId) {
           setSelectedBoothId(boothRes.data[0].id);
         }
       }
@@ -185,7 +205,7 @@ export default function AdminInputShiftPage() {
     } finally {
       setLoadingMaster(false);
     }
-  }, [selectedBoothId, selectedAttendantId]);
+  }, [selectedBoothId, selectedAttendantId, paramBoothId]);
 
   useEffect(() => {
     loadMasterData();
@@ -1282,5 +1302,22 @@ export default function AdminInputShiftPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function AdminInputShiftPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[300px]">
+          <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+            Memuat form input shift...
+          </div>
+        </div>
+      }
+    >
+      <AdminInputShiftForm />
+    </Suspense>
   );
 }

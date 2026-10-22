@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { formatRupiah } from '@/lib/utils';
 import { api, downloadFile } from '@/lib/api-client';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   RefreshCw,
   TrendingUp,
@@ -12,11 +14,18 @@ import {
   FileSpreadsheet,
   Calendar,
   Eye,
+  Pencil,
+  ExternalLink,
+  Save,
   X,
   CheckCircle2,
   AlertCircle,
   Package,
   Layers,
+  Banknote,
+  Droplets,
+  CreditCard,
+  User,
 } from 'lucide-react';
 
 interface CupBreakdownItem {
@@ -49,9 +58,11 @@ interface SummaryItem {
   boothId: string;
   boothName: string;
   boothAddress: string;
+  attendantId?: string;
   attendantName: string;
   cashModal: number;
   cashFinal: number | null;
+  qrisFinal?: number;
   revenue: number;
   cupsSold: number;
   cupBreakdown: CupBreakdownItem[];
@@ -62,6 +73,12 @@ interface SummaryItem {
   status: string;
   saleItems?: SaleItemDetail[];
   stockItems?: StockItemDetail[];
+}
+
+interface AttendantOption {
+  id: string;
+  name: string;
+  email?: string;
 }
 
 interface BoothOption {
@@ -86,8 +103,104 @@ export default function SummaryPage() {
   const [data, setData] = useState<SummaryItem[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Auth & Admin check
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+
   // Modal detail per shift
   const [selectedReport, setSelectedReport] = useState<SummaryItem | null>(null);
+
+  // Modal edit per shift (Khusus Administrator)
+  const [editingReport, setEditingReport] = useState<SummaryItem | null>(null);
+  const [editForm, setEditForm] = useState<{
+    cashModal: number;
+    cashFinal: number;
+    qrisFinal: number;
+    teaRemainingLiters: number;
+    notes: string;
+    status: 'OPEN' | 'CLOSED';
+    attendantId: string;
+  }>({
+    cashModal: 0,
+    cashFinal: 0,
+    qrisFinal: 0,
+    teaRemainingLiters: 0,
+    notes: '',
+    status: 'CLOSED',
+    attendantId: '',
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editFeedback, setEditFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [attendantsList, setAttendantsList] = useState<AttendantOption[]>([]);
+
+  // Fetch attendant options if admin
+  useEffect(() => {
+    if (isAdmin) {
+      api.get<AttendantOption[]>('/users?role=BOOTH_ATTENDANT').then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          setAttendantsList(res.data);
+        }
+      });
+    }
+  }, [isAdmin]);
+
+  const handleOpenEdit = (report: SummaryItem) => {
+    setEditingReport(report);
+    setEditForm({
+      cashModal: report.cashModal,
+      cashFinal: report.cashFinal ?? 0,
+      qrisFinal: report.qrisFinal ?? 0,
+      teaRemainingLiters: report.teaRemainingLiters ?? 0,
+      notes: report.notes ?? '',
+      status: (report.status as 'OPEN' | 'CLOSED') || 'CLOSED',
+      attendantId: report.attendantId || '',
+    });
+    setEditFeedback(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReport) return;
+    setEditSubmitting(true);
+    setEditFeedback(null);
+
+    try {
+      const payload = {
+        cashModal: Number(editForm.cashModal),
+        cashFinal: Number(editForm.cashFinal),
+        qrisFinal: Number(editForm.qrisFinal),
+        teaRemainingLiters: Number(editForm.teaRemainingLiters),
+        notes: editForm.notes,
+        status: editForm.status,
+        ...(editForm.attendantId ? { attendantId: editForm.attendantId } : {}),
+      };
+
+      const res = await api.patch<{ message?: string }>(
+        `/daily-reports/${editingReport.id}`,
+        payload
+      );
+
+      if (res.success) {
+        setEditFeedback({ type: 'success', message: 'Laporan shift berhasil diperbarui.' });
+        setTimeout(() => {
+          setEditingReport(null);
+          fetchSummary();
+        }, 800);
+      } else {
+        setEditFeedback({
+          type: 'error',
+          message: res.error?.message || 'Gagal menyimpan perubahan laporan',
+        });
+      }
+    } catch (err) {
+      setEditFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Terjadi kesalahan sistem saat menyimpan laporan',
+      });
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
 
   const [salesExportLoading, setSalesExportLoading] = useState(false);
   const [shiftExportLoading, setShiftExportLoading] = useState(false);
@@ -499,14 +612,29 @@ export default function SummaryPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReport(row)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Detail
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReport(row)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer"
+                              title="Lihat Detail Laporan Shift"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Detail
+                            </button>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                data-testid={`edit-report-btn-${row.id}`}
+                                onClick={() => handleOpenEdit(row)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 font-bold text-xs transition cursor-pointer"
+                                title="Edit Laporan Shift (Administrator)"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -669,7 +797,24 @@ export default function SummaryPage() {
             )}
 
             {/* Modal Footer */}
-            <div className="pt-2 border-t border-slate-100 flex justify-end">
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+              {isAdmin ? (
+                <button
+                  type="button"
+                  data-testid="detail-modal-edit-btn"
+                  onClick={() => {
+                    const rep = selectedReport;
+                    setSelectedReport(null);
+                    handleOpenEdit(rep);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition cursor-pointer shadow-xs"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Edit Laporan Ini
+                </button>
+              ) : (
+                <div />
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedReport(null)}
@@ -678,6 +823,249 @@ export default function SummaryPage() {
                 Tutup Detail
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDIT LAPORAN PENJUALAN SHIFT (KHUSUS ADMINISTRATOR) */}
+      {editingReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 my-8 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                    <Pencil className="w-4 h-4" />
+                  </span>
+                  <h3 className="text-lg font-bold text-slate-900">Edit Laporan Penjualan</h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {editingReport.boothName} • {editingReport.date} (Shift {editingReport.shiftType})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingReport(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Shortcut ke Editor Lengkap Shift */}
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3">
+              <div className="text-xs text-emerald-800">
+                <p className="font-bold">Koreksi rincian menu atau stok cup?</p>
+                <p className="text-[11px] text-emerald-700">Gunakan editor lengkap untuk mengedit item cup & varian menu shift ini.</p>
+              </div>
+              <Link
+                href={`/admin/input-shift?boothId=${editingReport.boothId}&date=${editingReport.date}&shift=${editingReport.shiftType}`}
+                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition shadow-xs"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Editor Lengkap
+              </Link>
+            </div>
+
+            {/* Feedback Alert */}
+            {editFeedback && (
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
+                  editFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-red-50 border-red-200 text-red-800'
+                }`}
+              >
+                {editFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                )}
+                <span>{editFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Edit Form */}
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              {/* Row 1: Attendant & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-slate-500" />
+                    Staf Kasir Shift
+                  </label>
+                  <select
+                    value={editForm.attendantId}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, attendantId: e.target.value }))}
+                    className="w-full text-xs font-semibold rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none bg-white"
+                  >
+                    <option value="">{editingReport.attendantName || 'Pilih Staf'}</option>
+                    {attendantsList.map((att) => (
+                      <option key={att.id} value={att.id}>
+                        {att.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Status Laporan Shift
+                  </label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as 'OPEN' | 'CLOSED' }))}
+                    className="w-full text-xs font-semibold rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none bg-white"
+                  >
+                    <option value="CLOSED">CLOSED (Shift Selesai)</option>
+                    <option value="OPEN">OPEN (Sedang Beroperasi)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Modal Awal & Omzet */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                    <Banknote className="w-3.5 h-3.5 text-slate-500" />
+                    Modal Kas Awal (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.cashModal}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, cashModal: Math.max(0, Number(e.target.value)) }))}
+                    className="w-full text-xs font-mono font-bold rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Total Omzet Penjualan
+                  </label>
+                  <div className="w-full text-xs font-mono font-bold text-emerald-800 bg-slate-50 border border-slate-200 rounded-lg p-2.5 flex items-center justify-between">
+                    <span>{formatRupiah(editingReport.revenue)}</span>
+                    <span className="text-[10px] text-slate-500 font-normal">({editingReport.cupsSold} cup)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Kas Akhir & QRIS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                    <Banknote className="w-3.5 h-3.5 text-slate-500" />
+                    Uang Kas Akhir Fisik (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.cashFinal}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, cashFinal: Math.max(0, Number(e.target.value)) }))}
+                    className="w-full text-xs font-mono font-bold rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                    <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+                    Setoran Non-Tunai / QRIS (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.qrisFinal}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, qrisFinal: Math.max(0, Number(e.target.value)) }))}
+                    className="w-full text-xs font-mono font-bold rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Sisa Teh */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <Droplets className="w-3.5 h-3.5 text-slate-500" />
+                  Sisa Teh di Dispenser (Liter)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editForm.teaRemainingLiters}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, teaRemainingLiters: Math.max(0, Number(e.target.value)) }))}
+                  className="w-full text-xs font-mono font-bold rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Live Reconciliation Card */}
+              {(() => {
+                const editExpectedCash = editForm.cashModal + Math.max(0, editingReport.revenue - editForm.qrisFinal);
+                const editVariance = editForm.cashFinal - editExpectedCash;
+                return (
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">Kas Fisik yang Diharapkan:</span>
+                      <span className="font-mono font-bold text-slate-800">{formatRupiah(editExpectedCash)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
+                      <span className="text-slate-700 font-bold">Kalkulasi Selisih Kasir:</span>
+                      <span
+                        className={`font-mono font-extrabold ${
+                          editVariance === 0
+                            ? 'text-emerald-700'
+                            : editVariance > 0
+                            ? 'text-blue-700'
+                            : 'text-red-600'
+                        }`}
+                      >
+                        {editVariance === 0 ? 'Rp 0 (Pas ✓)' : formatRupiah(editVariance)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Catatan Operasional Shift
+                </label>
+                <textarea
+                  rows={2}
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Catatan kendala mesin cup sealer, stok cup, uang pecahan, dll..."
+                  className="w-full text-xs rounded-lg border border-slate-300 p-2.5 focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingReport(null)}
+                  disabled={editSubmitting}
+                  className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {editSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      Simpan Perubahan
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
