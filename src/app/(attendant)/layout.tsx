@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, PlayCircle, StopCircle, History, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
@@ -34,8 +35,14 @@ export default function AttendantLayout({ children }: { children: React.ReactNod
       {/* Top Header Bar (Mobile Optimized) */}
       <header className="sticky top-0 z-30 bg-emerald-900 text-white shadow-md px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-sm text-lg">
-            🍵
+          <div className="relative w-9 h-9 flex-shrink-0">
+            <Image
+              src="/logo.png"
+              alt="Teh Baling Logo"
+              fill
+              priority
+              className="object-contain"
+            />
           </div>
           <div>
             <h1 className="font-bold text-sm text-white leading-tight">Teh Baling Attendant</h1>

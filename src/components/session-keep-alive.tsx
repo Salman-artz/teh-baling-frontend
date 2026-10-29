@@ -1,11 +1,28 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { getAuthToken, getRefreshToken, isTokenExpiringSoon, refreshAuthToken } from '@/lib/api-client';
+import { usePathname } from 'next/navigation';
+import {
+  getAuthToken,
+  getRefreshToken,
+  isTokenExpiringSoon,
+  refreshAuthToken,
+  cancelAllPendingRequests,
+} from '@/lib/api-client';
 
 export function SessionKeepAlive() {
+  const pathname = usePathname();
+  const prevPathnameRef = useRef(pathname);
   const lastActiveRef = useRef<number>(Date.now());
   const lastThrottleRef = useRef<number>(0);
+
+  // Cancel in-flight GET requests from previous page whenever user navigates to a new route
+  useEffect(() => {
+    if (prevPathnameRef.current !== pathname) {
+      cancelAllPendingRequests(`Navigated to ${pathname}`);
+      prevPathnameRef.current = pathname;
+    }
+  }, [pathname]);
 
   useEffect(() => {
     // Record user activity with throttling (max once per 10 seconds)

@@ -14,15 +14,22 @@ function parseJwtPayload(token: string) {
   }
 }
 
+function getDashboardPath(role?: string): string {
+  if (role === 'BOOTH_ATTENDANT') return '/attendant';
+  if (role === 'PRODUCTION') return '/production';
+  return '/admin';
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Protected route paths
+  const isAuthGuestRoute = pathname === '/login' || pathname === '/register';
   const isAdminRoute = pathname.startsWith('/admin');
   const isAttendantRoute = pathname.startsWith('/attendant');
   const isProductionRoute = pathname.startsWith('/production');
+  const isRootRoute = pathname === '/';
 
-  if (!isAdminRoute && !isAttendantRoute && !isProductionRoute) {
+  if (!isAdminRoute && !isAttendantRoute && !isProductionRoute && !isAuthGuestRoute && !isRootRoute) {
     return NextResponse.next();
   }
 
@@ -38,11 +45,24 @@ export function middleware(request: NextRequest) {
   const accessPayload = accessToken ? parseJwtPayload(accessToken) : null;
   const refreshPayload = refreshToken ? parseJwtPayload(refreshToken) : null;
 
-  const isAccessValid = accessPayload && (!accessPayload.exp || accessPayload.exp > nowInSeconds);
-  const isRefreshValid = refreshPayload && (!refreshPayload.exp || refreshPayload.exp > nowInSeconds);
+  const isAccessValid = !!accessPayload && (!accessPayload.exp || accessPayload.exp > nowInSeconds);
+  const isRefreshValid = !!refreshPayload && (!refreshPayload.exp || refreshPayload.exp > nowInSeconds);
+  const isAuthenticated = isAccessValid || isRefreshValid;
+  const role = accessPayload?.role || refreshPayload?.role;
+
+  // Redirect authenticated users away from /login, /register, and /
+  if (isAuthGuestRoute || isRootRoute) {
+    if (isAuthenticated && role) {
+      return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
+    }
+    if (pathname === '/register') {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    return NextResponse.next();
+  }
 
   // If neither token is valid, redirect to login
-  if (!isAccessValid && !isRefreshValid) {
+  if (!isAuthenticated || !role) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     const response = NextResponse.redirect(loginUrl);
@@ -51,35 +71,22 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  const role = accessPayload?.role || refreshPayload?.role;
-  if (!role) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
   // Role Based Route Guards
   if (isAdminRoute && role !== 'ADMIN' && role !== 'OPERATIONAL_ADMIN') {
-    if (role === 'BOOTH_ATTENDANT') return NextResponse.redirect(new URL('/attendant', request.url));
-    if (role === 'PRODUCTION') return NextResponse.redirect(new URL('/production', request.url));
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
   }
 
   if (isAttendantRoute && role !== 'BOOTH_ATTENDANT') {
-    if (role === 'ADMIN' || role === 'OPERATIONAL_ADMIN') return NextResponse.redirect(new URL('/admin', request.url));
-    if (role === 'PRODUCTION') return NextResponse.redirect(new URL('/production', request.url));
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
   }
 
   if (isProductionRoute && role !== 'PRODUCTION') {
-    if (role === 'ADMIN' || role === 'OPERATIONAL_ADMIN') return NextResponse.redirect(new URL('/admin', request.url));
-    if (role === 'BOOTH_ATTENDANT') return NextResponse.redirect(new URL('/attendant', request.url));
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL(getDashboardPath(role), request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/attendant/:path*', '/production/:path*'],
+  matcher: ['/admin/:path*', '/attendant/:path*', '/production/:path*', '/login', '/register', '/'],
 };

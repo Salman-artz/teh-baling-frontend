@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -16,15 +17,18 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const getDashboardUrl = (role?: string) => {
     if (role === 'BOOTH_ATTENDANT') return '/attendant';
     if (role === 'PRODUCTION') return '/production';
     return '/admin';
   };
+
+  useEffect(() => {
+    setMounted(true);
+    if (user && accessToken) {
+      router.replace(getDashboardUrl(user.role));
+    }
+  }, [user, accessToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +67,16 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center">
+          <div className="relative w-36 h-24 mb-1">
+            <Image
+              src="/logo.png"
+              alt="Teh Baling Logo"
+              fill
+              priority
+              className="object-contain"
+            />
+          </div>
           <h1 className="text-2xl font-bold text-slate-900">Teh Baling Admin</h1>
           <p className="mt-1 text-sm text-slate-500">Masukkan email dan password akun Anda</p>
         </div>

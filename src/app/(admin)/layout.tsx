@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -62,8 +63,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Brand Logo */}
         <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-emerald-950">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md">
-              🍵
+            <div className="relative w-10 h-10 flex-shrink-0">
+              <Image
+                src="/logo.png"
+                alt="Teh Baling Logo"
+                fill
+                priority
+                className="object-contain"
+              />
             </div>
             <div>
               <h1 className="font-bold text-base leading-none text-white">Teh Baling</h1>
@@ -166,8 +173,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="w-64 bg-slate-900 text-white flex flex-col h-full shadow-2xl">
               <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-emerald-950">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white">
-                    🍵
+                  <div className="relative w-9 h-9 flex-shrink-0">
+                    <Image
+                      src="/logo.png"
+                      alt="Teh Baling Logo"
+                      fill
+                      priority
+                      className="object-contain"
+                    />
                   </div>
                   <span className="font-bold text-sm">Teh Baling Admin</span>
                 </div>

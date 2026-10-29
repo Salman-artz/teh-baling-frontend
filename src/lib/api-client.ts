@@ -168,7 +168,26 @@ export async function downloadFile(endpoint: string, fallbackFilename: string): 
   }
 }
 
-const inFlightGetRequests = new Map<string, Promise<ApiResponse<unknown>>>();
+interface InFlightRequestEntry {
+  promise: Promise<ApiResponse<unknown>>;
+  controller: AbortController;
+}
+
+const inFlightGetRequests = new Map<string, InFlightRequestEntry>();
+
+/**
+ * Abort all pending in-flight GET requests (called on page/route navigation).
+ */
+export function cancelAllPendingRequests(reason = 'Navigation'): void {
+  for (const entry of inFlightGetRequests.values()) {
+    try {
+      entry.controller.abort(reason);
+    } catch {
+      // Ignore if already aborted
+    }
+  }
+  inFlightGetRequests.clear();
+}
 
 export async function apiClient<T>(
   endpoint: string,
@@ -177,7 +196,26 @@ export async function apiClient<T>(
 ): Promise<ApiResponse<T>> {
   const isGet = !options || !options.method || options.method === 'GET';
   if (isGet && inFlightGetRequests.has(endpoint) && !isRetry) {
-    return inFlightGetRequests.get(endpoint) as Promise<ApiResponse<T>>;
+    return inFlightGetRequests.get(endpoint)!.promise as Promise<ApiResponse<T>>;
+  }
+
+  const controller = new AbortController();
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      controller.abort(options.signal.reason);
+    } else {
+      options.signal.addEventListener(
+        'abort',
+        () => {
+          try {
+            controller.abort(options.signal?.reason);
+          } catch {
+            // Ignore
+          }
+        },
+        { once: true }
+      );
+    }
   }
 
   let token = getAuthToken();
@@ -194,7 +232,11 @@ export async function apiClient<T>(
 
   const reqPromise = (async () => {
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        signal: controller.signal,
+        headers,
+      });
 
       if (res.status === 401 && !isRetry) {
         const refreshedToken = await refreshAuthToken();
@@ -216,7 +258,13 @@ export async function apiClient<T>(
       }
 
       return json;
-    } catch {
+    } catch (err: unknown) {
+      if (
+        (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) ||
+        controller.signal.aborted
+      ) {
+        return { success: false, error: { code: 'REQUEST_ABORTED', message: 'Permintaan dibatalkan.' } };
+      }
       return { success: false, error: { code: 'NETWORK_ERROR', message: 'Koneksi jaringan terputus.' } };
     } finally {
       if (isGet) {
@@ -226,17 +274,21 @@ export async function apiClient<T>(
   })();
 
   if (isGet && !isRetry) {
-    inFlightGetRequests.set(endpoint, reqPromise);
+    inFlightGetRequests.set(endpoint, {
+      promise: reqPromise,
+      controller,
+    });
   }
 
   return reqPromise;
 }
 
 export const api = {
-  get: <T>(endpoint: string) => apiClient<T>(endpoint),
-  post: <T>(endpoint: string, body: unknown) =>
-    apiClient<T>(endpoint, { method: 'POST', body: JSON.stringify(body) }),
-  patch: <T>(endpoint: string, body: unknown) =>
-    apiClient<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: <T>(endpoint: string) => apiClient<T>(endpoint, { method: 'DELETE' }),
+  get: <T>(endpoint: string, options?: RequestInit) => apiClient<T>(endpoint, options),
+  post: <T>(endpoint: string, body: unknown, options?: RequestInit) =>
+    apiClient<T>(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),
+  patch: <T>(endpoint: string, body: unknown, options?: RequestInit) =>
+    apiClient<T>(endpoint, { ...options, method: 'PATCH', body: JSON.stringify(body) }),
+  delete: <T>(endpoint: string, options?: RequestInit) =>
+    apiClient<T>(endpoint, { ...options, method: 'DELETE' }),
 };

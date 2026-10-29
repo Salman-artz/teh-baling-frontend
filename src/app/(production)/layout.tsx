@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Flame, History, LogOut, Truck } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
@@ -31,8 +32,14 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
       {/* Top Header Bar */}
       <header className="sticky top-0 z-30 bg-amber-900 text-white shadow-md px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-amber-600 flex items-center justify-center font-bold text-white shadow-sm text-lg">
-            🔥
+          <div className="relative w-9 h-9 flex-shrink-0">
+            <Image
+              src="/logo.png"
+              alt="Teh Baling Logo"
+              fill
+              priority
+              className="object-contain"
+            />
           </div>
           <div>
             <h1 className="font-bold text-sm text-white leading-tight">Dapur Produksi Teh Baling</h1>

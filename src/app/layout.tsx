@@ -20,7 +20,9 @@ export const metadata: Metadata = {
   title: "admintehbaling",
   description: "Sistem Administrasi Teh Baling",
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>",
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
   },
 };
 
